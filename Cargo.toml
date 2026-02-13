@@ -1,0 +1,40 @@
+[package]
+name = "boardtask"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web framework
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["trace"] }
+
+# HTML templating
+askama = "0.12"
+askama_axum = "0.4"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config
+dotenvy = "0.15"
+
+# Authentication
+axum-extra = { version = "0.9", features = ["cookie"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+validator = { version = "0.18", features = ["derive"] }
+argon2 = "0.5"
+ulid = "1.1"
+time = "0.3"
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+http = "1"
+urlencoding = "2"

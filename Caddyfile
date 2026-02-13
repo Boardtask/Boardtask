@@ -1,0 +1,10 @@
+boardtask.local {
+	root * public
+	@static file
+	handle @static {
+		file_server
+	}
+	handle {
+		reverse_proxy localhost:3000
+	}
+}

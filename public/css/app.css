@@ -1,0 +1,16 @@
+/* Main stylesheet for Boardtask */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    color: #1a1a1a;
+    line-height: 1.6;
+}

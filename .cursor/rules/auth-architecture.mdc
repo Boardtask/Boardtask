@@ -1,0 +1,22 @@
+---
+description: Authentication layering and conventions
+globs: src/app/**/*
+---
+
+# Authentication Architecture
+
+Authentication lives under `src/app/`:
+
+- **Domain types**: `src/app/domain/` — `Email`, `Password`, `HashedPassword`, `UserId`
+- **Database layer**: `src/app/db/` — User and session persistence with parameterized queries
+- **Service layer**: `src/app/features/auth/service.rs` — Orchestrates signup/login logic
+- **Feature slices**: `src/app/features/auth/signup.rs` and `src/app/features/auth/login.rs`
+- **Error handling**: `src/app/error.rs` — Unified error responses
+
+We use:
+
+- **ULIDs** for identifiers (non-sequential, sortable, globally unique)
+- **Argon2id** for password hashing with random salts
+- **HttpOnly + SameSite=Lax** cookies for session management
+- **Vertical slice architecture** with colocated templates
+- **Three-layer validation**: Form → Domain → Business rules

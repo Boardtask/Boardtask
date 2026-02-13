@@ -1,0 +1,58 @@
+use sqlx::FromRow;
+use time::OffsetDateTime;
+
+use crate::app::domain::{Email, HashedPassword, UserId};
+
+/// Database row for users table.
+#[derive(Debug, FromRow)]
+pub struct User {
+    pub id: String,
+    pub email: String,
+    pub password_hash: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Data structure for inserting a new user.
+pub struct NewUser {
+    pub id: UserId,
+    pub email: Email,
+    pub password_hash: HashedPassword,
+}
+
+/// Find a user by email address.
+pub async fn find_by_email(
+    pool: &sqlx::SqlitePool,
+    email: &Email,
+) -> Result<Option<User>, sqlx::Error> {
+    sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = ?",
+    )
+    .bind(email.as_str())
+    .fetch_optional(pool)
+    .await
+}
+
+/// Insert a new user into the database.
+pub async fn insert<'e, E>(
+    executor: E,
+    user: &NewUser,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+
+    sqlx::query(
+        "INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(user.id.as_str())
+    .bind(user.email.as_str())
+    .bind(user.password_hash.as_str())
+    .bind(now)
+    .bind(now)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}

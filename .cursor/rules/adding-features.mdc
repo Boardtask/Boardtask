@@ -1,0 +1,22 @@
+---
+description: How to add new features to site and app areas
+alwaysApply: true
+---
+
+# Adding a New Feature Slice
+
+#### For Site Features (Marketing Website)
+
+1. Create `src/site/my_feature.rs` with `routes()`, handlers, and template struct
+2. Create `src/site/my_feature.html` for templates
+3. Add `pub mod my_feature;` to `src/site/mod.rs`
+4. Merge routes in `src/main.rs`: `.merge(site::my_feature::routes())`
+5. Add `src/site` to askama.toml `dirs` if not already present; use `#[template(path = "site/my_feature.html")]`
+
+#### For App Features (Dashboard Area)
+
+1. Create `src/app/features/my_feature.rs` with form struct, template, handlers, and `routes()`
+2. Create `src/app/features/my_feature.html` for templates
+3. Add `pub mod my_feature;` to `src/app/features/mod.rs` and merge `.merge(features::my_feature::routes())` in `src/app/mod.rs`
+4. Template path: `my_feature.html` (add `src/app/features/my_feature` to askama `dirs`)
+5. Add feature-specific models to `src/app/db/` when needed

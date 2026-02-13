@@ -1,0 +1,27 @@
+---
+description: Template placement and Askama path conventions
+globs: **/*.rs, **/*.html
+---
+
+# Colocated Templates
+
+HTML templates live beside their Rust code. This keeps each feature slice self-contained:
+
+- `src/base.html` — shared layout (at the root)
+- `src/site/home.html` — colocated with `src/site/home.rs`
+- `src/app/features/auth/signup.html` — colocated with `src/app/features/auth/signup.rs`
+- `src/app/features/auth/login.html` — colocated with `src/app/features/auth/login.rs`
+
+Template paths in Rust use relative paths from Askama's `dirs`:
+
+```rust
+#[derive(Template)]
+#[template(path = "site/home.html")]
+pub struct HomeTemplate {
+    pub app_name: &'static str,
+}
+```
+
+Askama compiles templates into the binary at build time, so template errors are caught during compilation.
+
+Reference [askama.toml](../askama.toml): `dirs = ["src", "src/app/features/auth", "src/site"]`

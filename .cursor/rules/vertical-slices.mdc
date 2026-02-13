@@ -1,0 +1,14 @@
+---
+description: Vertical slice architecture and project organization
+alwaysApply: true
+---
+
+# Vertical Slice Architecture
+
+The application uses **vertical architecture** with three distinct areas, each organized by feature slices:
+
+- **site** — Marketing website (landing pages, home, about). Already implemented with `site/home.rs`.
+- **docs** — Documentation section (planned for future).
+- **app** — Authenticated dashboard area: login, features, projects. Structure: `app/features/{auth,projects,...}` and `app/db` for app-specific models.
+
+Each feature slice contains its own routes, handlers, templates, and database queries.
