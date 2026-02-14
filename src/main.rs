@@ -60,6 +60,7 @@ async fn main() {
         db: pool,
         mail,
         config,
+        resend_cooldown: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
     };
     let router = boardtask::create_router(state);
 

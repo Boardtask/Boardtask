@@ -32,6 +32,8 @@ pub struct LoginForm {
 pub struct LoginTemplate {
     pub app_name: &'static str,
     pub error: String,
+    pub email: String,
+    pub resend_verification_url: String,
 }
 
 /// Authenticate a user. Returns the session ID on success.
@@ -69,11 +71,16 @@ async fn authenticate(
     Ok(session_id)
 }
 
+/// Message shown when user needs to verify email.
+const UNVERIFIED_MSG: &str = "Please verify your email before signing in. Check your inbox for the verification link.";
+
 /// GET /login — Show login form.
 pub async fn show() -> LoginTemplate {
     LoginTemplate {
         app_name: APP_NAME,
         error: String::new(),
+        email: String::new(),
+        resend_verification_url: String::new(),
     }
 }
 
@@ -88,17 +95,21 @@ pub async fn submit(
         let template = LoginTemplate {
             app_name: APP_NAME,
             error: "Invalid form data".to_string(),
+            email: form.email.clone(),
+            resend_verification_url: String::new(),
         };
         return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
     }
 
     // Parse into domain types
-    let email = match Email::new(form.email) {
+    let email = match Email::new(form.email.clone()) {
         Ok(email) => email,
         Err(_) => {
             let template = LoginTemplate {
                 app_name: APP_NAME,
                 error: "Invalid email or password".to_string(),
+                email: form.email,
+                resend_verification_url: String::new(),
             };
             return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
         }
@@ -113,10 +124,17 @@ pub async fn submit(
         Ok(session_id) => {
             Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to("/app")))
         }
-        Err(AppError::Auth(msg)) => {
+        Err(AppError::Auth(ref msg)) => {
+            let resend_verification_url = if msg == UNVERIFIED_MSG {
+                format!("/resend-verification?email={}", urlencoding::encode(email.as_str()))
+            } else {
+                String::new()
+            };
             let template = LoginTemplate {
                 app_name: APP_NAME,
-                error: msg,
+                error: msg.clone(),
+                email: email.as_str().to_string(),
+                resend_verification_url,
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }
@@ -124,6 +142,8 @@ pub async fn submit(
             let template = LoginTemplate {
                 app_name: APP_NAME,
                 error: "Internal server error".to_string(),
+                email: email.as_str().to_string(),
+                resend_verification_url: String::new(),
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }

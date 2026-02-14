@@ -70,7 +70,7 @@ async fn create_account(
 
     // Generate verification token
     let token = UserId::new().as_str();
-    let expires_at = OffsetDateTime::now_utc() + Duration::hours(24);
+    let expires_at = OffsetDateTime::now_utc() + Duration::hours(72);
     db::email_verification::insert_token(&mut *tx, &new_user.id, &token, expires_at)
         .await.map_err(AppError::Database)?;
 

@@ -40,6 +40,7 @@ thiserror = "1.0"
 
 # Token generation
 hex = "0.4"
+urlencoding = "2"
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

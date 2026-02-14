@@ -14,6 +14,7 @@ mod auth {
             db: pool,
             mail: std::sync::Arc::new(boardtask::app::mail::ConsoleMailer),
             config: boardtask::app::config::Config::for_tests(),
+            resend_cooldown: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         };
         create_router(state)
     }

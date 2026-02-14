@@ -43,6 +43,18 @@ pub async fn find_valid_token(
     Ok(row.and_then(|s| UserId::from_string(&s).ok()))
 }
 
+/// Delete all verification tokens for a user (used before resending a new link).
+pub async fn delete_tokens_for_user<'e, E>(executor: E, user_id: &UserId) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query("DELETE FROM email_verification_tokens WHERE user_id = ?")
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 /// Delete a token after successful verification.
 pub async fn delete_token<'e, E>(executor: E, token: &str) -> Result<(), sqlx::Error>
 where

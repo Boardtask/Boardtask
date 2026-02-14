@@ -31,6 +31,7 @@ pub struct VerifyEmailTemplate {
 pub struct CheckEmailTemplate {
     pub app_name: &'static str,
     pub email: String,
+    pub sent: bool,
 }
 
 /// Error type for verify-email route. Renders HTML instead of JSON.
@@ -81,9 +82,11 @@ async fn verify_user(db: &sqlx::SqlitePool, token: &str) -> Result<String, AppEr
 /// GET /check-email — Shown after signup. Display email for user to check.
 pub async fn check_email_page(Query(params): Query<std::collections::HashMap<String, String>>) -> CheckEmailTemplate {
     let email = params.get("email").cloned().unwrap_or_else(|| "your email".to_string());
+    let sent = params.get("sent").map(|s| s == "1").unwrap_or(false);
     CheckEmailTemplate {
         app_name: APP_NAME,
         email,
+        sent,
     }
 }
 
