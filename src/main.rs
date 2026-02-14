@@ -1,3 +1,4 @@
+use boardtask::app;
 use dotenvy::dotenv;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::env;
@@ -45,8 +46,16 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
-    // Build the application
-    let router = boardtask::create_router(pool);
+    // Build the mail adapter
+    let mail = app::mail::from_env()
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to initialize mail adapter: {}", e);
+            std::process::exit(1);
+        });
+
+    // Build the application state
+    let state = app::AppState { db: pool, mail };
+    let router = boardtask::create_router(state);
 
     // Start the server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")

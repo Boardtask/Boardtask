@@ -1,2 +1,2 @@
 [general]
-dirs = ["src", "src/app/features/auth", "src/app/features/dashboard", "src/site"]
+dirs = ["src", "src/app/features/auth", "src/app/features", "src/site"]

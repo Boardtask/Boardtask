@@ -2,11 +2,9 @@ pub mod app;
 pub mod site;
 
 use axum::Router;
-use sqlx::SqlitePool;
 
 /// Build the full application router. Used by main and by integration tests.
-pub fn create_router(pool: SqlitePool) -> Router {
-    let state = app::AppState { db: pool };
+pub fn create_router(state: app::AppState) -> Router {
     Router::new()
         .merge(site::home::routes())
         .merge(app::routes(state.clone()))

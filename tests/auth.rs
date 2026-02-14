@@ -10,7 +10,11 @@ mod auth {
     }
 
     pub fn test_router(pool: SqlitePool) -> axum::Router {
-        create_router(pool)
+        let state = boardtask::app::AppState {
+            db: pool,
+            mail: std::sync::Arc::new(boardtask::app::mail::ConsoleMailer),
+        };
+        create_router(state)
     }
     }
 
