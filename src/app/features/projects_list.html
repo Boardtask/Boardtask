@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Projects · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8">
+    <h1 class="text-2xl font-bold mb-6">Projects</h1>
+
+    <p class="mb-4">
+        <a href="/app/projects/new" class="text-blue-600 hover:text-blue-500">Create a project</a>
+    </p>
+
+    <ul class="space-y-2">
+        {% for project in projects %}
+        <li>
+            <a href="/app/projects/{{ project.id }}" class="text-blue-600 hover:text-blue-500">{{ project.title }}</a>
+        </li>
+        {% else %}
+        <p class="text-gray-600">No projects yet. Create your first project!</p>
+        {% endfor %}
+    </ul>
+
+    <p class="mt-6 text-center">
+        <a href="/app" class="text-blue-600 hover:text-blue-500">Back to dashboard</a>
+    </p>
+</div>
+{% endblock %}

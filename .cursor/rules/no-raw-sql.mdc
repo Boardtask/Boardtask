@@ -1,0 +1,12 @@
+---
+description: Avoid raw SQL; use the db layer instead
+alwaysApply: true
+---
+
+# No Raw SQL
+
+Do not use raw SQL (`sqlx::query`, `sqlx::query_scalar`, etc.) in application or test code. Use the db layer in `src/app/db/` instead.
+
+- **Tests**: Use helpers like `user_id_from_cookie`, `create_verified_user`, or db functions (`db::sessions::find_valid`, `db::projects::insert`, etc.).
+- **App code**: All database access belongs in `src/app/db/`. Add new queries there rather than in handlers or feature code.
+- **Migrations**: Raw SQL is allowed in `migrations/*.sql` only.

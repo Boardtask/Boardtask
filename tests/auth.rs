@@ -1,42 +1,14 @@
+mod common;
+
 mod auth {
-    mod common {
-    use boardtask::create_router;
-    use sqlx::SqlitePool;
-
-    pub async fn test_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-        pool
-    }
-
-    pub fn test_router(pool: SqlitePool) -> axum::Router {
-        let state = boardtask::app::AppState {
-            db: pool,
-            mail: std::sync::Arc::new(boardtask::app::mail::ConsoleMailer),
-            config: boardtask::app::config::Config::for_tests(),
-            resend_cooldown: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        };
-        create_router(state)
-    }
-    }
-
     mod signup {
-        use super::common::*;
-    use axum::body::Body;
-    use http::StatusCode;
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
+        use crate::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
 
-    fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
-        format!(
-            "email={}&password={}&confirm_password={}",
-            urlencoding::encode(email),
-            urlencoding::encode(password),
-            urlencoding::encode(confirm_password)
-        )
-    }
-
-    #[tokio::test]
+        #[tokio::test]
     async fn creates_user_and_redirects() {
         let pool = test_pool().await;
         let app = test_router(pool);
@@ -100,52 +72,13 @@ mod auth {
     }
 
     mod login {
-        use super::common::*;
-    use axum::body::Body;
-    use http::StatusCode;
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
+        use crate::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
 
-    fn login_form_body(email: &str, password: &str) -> String {
-        format!(
-            "email={}&password={}",
-            urlencoding::encode(email),
-            urlencoding::encode(password)
-        )
-    }
-
-    fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
-        format!(
-            "email={}&password={}&confirm_password={}",
-            urlencoding::encode(email),
-            urlencoding::encode(password),
-            urlencoding::encode(confirm_password)
-        )
-    }
-
-    async fn create_verified_user(pool: &sqlx::SqlitePool, email: &str, password: &str) {
-        use boardtask::app::domain::{Email, Password, HashedPassword, UserId};
-        use boardtask::app::db;
-
-        let email = Email::new(email.to_string()).unwrap();
-        let password = Password::new(password.to_string()).unwrap();
-        let password_hash = HashedPassword::from_password(&password).unwrap();
-        let user_id = UserId::new();
-
-        let new_user = db::NewUser {
-            id: user_id.clone(),
-            email: email.clone(),
-            password_hash,
-        };
-
-        // Insert user
-        db::insert(pool, &new_user).await.unwrap();
-
-        // Mark as verified
-        db::mark_verified(pool, &user_id).await.unwrap();
-    }
-
-    #[tokio::test]
+        #[tokio::test]
     async fn valid_credentials_redirect_to_dashboard() {
         let pool = test_pool().await;
         let app = test_router(pool.clone());
@@ -303,33 +236,11 @@ mod auth {
     }
 
     mod logout {
-        use super::common::*;
+        use crate::common::*;
         use axum::body::Body;
         use boardtask::app::db;
         use http::StatusCode;
         use tower::ServiceExt;
-
-        pub(crate) fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
-            format!(
-                "email={}&password={}&confirm_password={}",
-                urlencoding::encode(email),
-                urlencoding::encode(password),
-                urlencoding::encode(confirm_password)
-            )
-        }
-
-        fn login_form_body(email: &str, password: &str) -> String {
-            format!(
-                "email={}&password={}",
-                urlencoding::encode(email),
-                urlencoding::encode(password)
-            )
-        }
-
-        pub(crate) fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
-            // Parse "session_id=abc123; Path=/; HttpOnly; SameSite=Lax"
-            set_cookie_header.split(';').next()?.strip_prefix("session_id=")
-        }
 
         /// Asserts that among all Set-Cookie headers, one is a removal cookie (Max-Age=0) for session_id.
         fn assert_removal_cookie_in_response<B>(response: &http::Response<B>) {
@@ -445,20 +356,11 @@ mod auth {
     }
 
     mod dashboard {
-        use super::common::*;
-        use super::logout::{extract_session_id_from_cookie, signup_form_body};
+        use crate::common::*;
         use axum::body::Body;
         use http::StatusCode;
         use http_body_util::BodyExt;
         use tower::ServiceExt;
-
-        fn login_form_body(email: &str, password: &str) -> String {
-            format!(
-                "email={}&password={}",
-                urlencoding::encode(email),
-                urlencoding::encode(password)
-            )
-        }
 
         #[tokio::test]
         async fn dashboard_requires_authentication() {
@@ -483,55 +385,12 @@ mod auth {
         async fn dashboard_renders_with_logout_form() {
             let pool = test_pool().await;
             let app = test_router(pool.clone());
+            let cookie = authenticated_cookie(&pool, &app, "dashboard@example.com", "Password123").await;
 
-            // Sign up and verify to get authenticated access to dashboard
-            let signup_body = signup_form_body("dashboard@example.com", "Password123", "Password123");
-            let signup_request = http::Request::builder()
-                .method("POST")
-                .uri("/signup")
-                .header("content-type", "application/x-www-form-urlencoded")
-                .body(Body::from(signup_body))
-                .unwrap();
-            let signup_response = app.clone().oneshot(signup_request).await.unwrap();
-            assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
-
-            // Get verification token and verify
-            let token: String = sqlx::query_scalar("SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-            let verify_request = http::Request::builder()
-                .method("GET")
-                .uri(&format!("/verify-email?token={}", token))
-                .body(Body::empty())
-                .unwrap();
-            let verify_response = app.clone().oneshot(verify_request).await.unwrap();
-            assert_eq!(verify_response.status(), StatusCode::SEE_OTHER);
-
-            // Login to get session
-            let login_body = login_form_body("dashboard@example.com", "Password123");
-            let login_request = http::Request::builder()
-                .method("POST")
-                .uri("/login")
-                .header("content-type", "application/x-www-form-urlencoded")
-                .body(Body::from(login_body))
-                .unwrap();
-            let login_response = app.clone().oneshot(login_request).await.unwrap();
-            assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
-
-            let set_cookie = login_response
-                .headers()
-                .get("set-cookie")
-                .unwrap()
-                .to_str()
-                .unwrap();
-            let session_id = extract_session_id_from_cookie(set_cookie).unwrap();
-
-            // Now access dashboard with valid session
             let request = http::Request::builder()
                 .method("GET")
                 .uri("/app")
-                .header("cookie", format!("session_id={}", session_id))
+                .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap();
             let response = app.oneshot(request).await.unwrap();
@@ -548,15 +407,11 @@ mod auth {
     }
 
     mod password_reset {
-        use super::common::*;
+        use crate::common::*;
         use axum::body::Body;
         use http::StatusCode;
         use http_body_util::BodyExt;
         use tower::ServiceExt;
-
-        fn forgot_password_form_body(email: &str) -> String {
-            format!("email={}", urlencoding::encode(email))
-        }
 
         #[tokio::test]
         async fn forgot_password_unknown_email_returns_success() {
@@ -589,12 +444,7 @@ mod auth {
             let app = test_router(pool);
 
             // First create a user
-            let signup_body = format!(
-                "email={}&password={}&confirm_password={}",
-                urlencoding::encode("reset-test@example.com"),
-                urlencoding::encode("Password123"),
-                urlencoding::encode("Password123")
-            );
+            let signup_body = signup_form_body("reset-test@example.com", "Password123", "Password123");
             let signup_request = http::Request::builder()
                 .method("POST")
                 .uri("/signup")

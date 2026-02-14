@@ -2,6 +2,7 @@ pub mod users;
 pub mod sessions;
 pub mod email_verification;
 pub mod password_reset;
+pub mod projects;
 
 pub use users::*;
 pub use sessions::*;

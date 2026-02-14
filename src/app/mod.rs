@@ -25,6 +25,7 @@ pub fn routes(_state: AppState) -> Router<AppState> {
     Router::new()
         .merge(features::auth::routes())
         .merge(features::dashboard::routes())
+        .merge(features::projects::routes())
 }
 
 pub mod config;
