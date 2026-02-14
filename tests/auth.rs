@@ -234,7 +234,7 @@ mod auth {
         use http::StatusCode;
         use tower::ServiceExt;
 
-        fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
+        pub(crate) fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
             format!(
                 "email={}&password={}&confirm_password={}",
                 urlencoding::encode(email),
@@ -243,7 +243,7 @@ mod auth {
             )
         }
 
-        fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
+        pub(crate) fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
             // Parse "session_id=abc123; Path=/; HttpOnly; SameSite=Lax"
             set_cookie_header.split(';').next()?.strip_prefix("session_id=")
         }
@@ -339,19 +339,59 @@ mod auth {
 
     mod dashboard {
         use super::common::*;
+        use super::logout::{extract_session_id_from_cookie, signup_form_body};
         use axum::body::Body;
         use http::StatusCode;
         use http_body_util::BodyExt;
         use tower::ServiceExt;
 
         #[tokio::test]
-        async fn dashboard_renders_with_logout_form() {
+        async fn dashboard_requires_authentication() {
             let pool = test_pool().await;
             let app = test_router(pool);
 
             let request = http::Request::builder()
                 .method("GET")
                 .uri("/app")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/login")
+            );
+        }
+
+        #[tokio::test]
+        async fn dashboard_renders_with_logout_form() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            // Sign up to get a session (dashboard requires authentication)
+            let signup_body = signup_form_body("dashboard@example.com", "Password123", "Password123");
+            let signup_request = http::Request::builder()
+                .method("POST")
+                .uri("/signup")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(signup_body))
+                .unwrap();
+            let signup_response = app.clone().oneshot(signup_request).await.unwrap();
+            assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
+
+            let set_cookie = signup_response
+                .headers()
+                .get("set-cookie")
+                .unwrap()
+                .to_str()
+                .unwrap();
+            let session_id = extract_session_id_from_cookie(set_cookie).unwrap();
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/app")
+                .header("cookie", format!("session_id={}", session_id))
                 .body(Body::empty())
                 .unwrap();
             let response = app.oneshot(request).await.unwrap();
