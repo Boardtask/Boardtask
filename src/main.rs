@@ -48,6 +48,11 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
+    // Run seeds (system node types, etc.)
+    boardtask::seeds::run_seeds(&pool)
+        .await
+        .expect("Failed to run seeds");
+
     // Build the mail adapter from config
     let mail = app::mail::from_config(&config)
         .unwrap_or_else(|e| {

@@ -1,0 +1,12 @@
+---
+description: How to use seeds and seeders for initial/system data
+alwaysApply: true
+---
+
+# Seeds and Seeders
+
+- Seeds live in `src/seeds/`; implement `Seed` trait and register in `all_seeds()`.
+- Use for system data (node types) or optional dev data (e.g. admin when `SEED_ADMIN_EMAIL` set).
+- Return `Applied` when done (recorded, skipped on next run); `Skipped` when preconditions fail.
+- Run at startup via `run_seeds(&pool)`; manual: `make seed` or `cargo run --bin seed -- --force-all`.
+- Use db layer only (no raw SQL); keep seeds thin; put logic in features (e.g. `graph::defaults`).

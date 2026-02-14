@@ -1,4 +1,5 @@
 mod dev_admin_user;
+mod system_node_types;
 
 use async_trait::async_trait;
 use sqlx::SqlitePool;
@@ -28,7 +29,10 @@ pub trait Seed: Send + Sync {
 
 /// All seeds in execution order (sorted by version).
 pub fn all_seeds() -> Vec<Box<dyn Seed>> {
-    let mut seeds: Vec<Box<dyn Seed>> = vec![Box::new(dev_admin_user::DevAdminUser)];
+    let mut seeds: Vec<Box<dyn Seed>> = vec![
+        Box::new(system_node_types::SystemNodeTypes),
+        Box::new(dev_admin_user::DevAdminUser),
+    ];
     seeds.sort_by_key(|s| s.version());
     seeds
 }

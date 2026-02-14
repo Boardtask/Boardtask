@@ -75,7 +75,7 @@ pub async fn create_verified_user(pool: &sqlx::SqlitePool, email: &str, password
         email: email_type.clone(),
         password_hash,
     };
-    db::insert(pool, &new_user).await.unwrap();
+    db::users::insert(pool, &new_user).await.unwrap();
     db::mark_verified(pool, &user_id).await.unwrap();
 }
 
@@ -99,7 +99,7 @@ pub async fn authenticated_cookie(
         email: email_type.clone(),
         password_hash,
     };
-    db::insert(pool, &new_user).await.unwrap();
+    db::users::insert(pool, &new_user).await.unwrap();
     db::mark_verified(pool, &user_id).await.unwrap();
 
     let login_body = login_form_body(email, password);

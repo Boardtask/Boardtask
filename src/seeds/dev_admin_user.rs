@@ -63,7 +63,7 @@ impl Seed for DevAdminUser {
             email: email.clone(),
             password_hash,
         };
-        db::insert(pool, &new_user).await?;
+        db::users::insert(pool, &new_user).await?;
         db::mark_verified(pool, &user_id).await?;
 
         eprintln!(

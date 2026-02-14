@@ -66,7 +66,7 @@ async fn create_account(
 
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
-    db::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
+    db::users::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
 
     // Generate verification token
     let token = UserId::new().as_str();
