@@ -6,11 +6,10 @@ use axum::{
     routing::get,
     Form, Router,
 };
-use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use validator::Validate;
 
-use crate::app::{db, AppState, APP_NAME};
+use crate::app::{db, session::AuthenticatedSession, AppState, APP_NAME};
 
 /// Create project form data.
 #[derive(Debug, Deserialize, Validate)]
@@ -44,32 +43,11 @@ pub struct ProjectShowTemplate {
     pub project: db::projects::Project,
 }
 
-/// Require valid session or redirect to login.
-async fn require_session(
-    jar: &CookieJar,
-    pool: &sqlx::SqlitePool,
-) -> Result<db::sessions::Session, Redirect> {
-    let session_id = match jar.get("session_id") {
-        Some(c) => c.value().to_string(),
-        None => return Err(Redirect::to("/login")),
-    };
-
-    match db::sessions::find_valid(pool, &session_id).await {
-        Ok(Some(s)) => Ok(s),
-        Ok(None) | Err(_) => Err(Redirect::to("/login")),
-    }
-}
-
 /// GET /app/projects/new — Show project creation form.
 pub async fn show_form(
-    State(state): State<AppState>,
-    jar: CookieJar,
+    AuthenticatedSession(_): AuthenticatedSession,
+    State(_state): State<AppState>,
 ) -> Response {
-    let _ = match require_session(&jar, &state.db).await {
-        Ok(s) => s,
-        Err(r) => return r.into_response(),
-    };
-
     CreateProjectTemplate {
         app_name: APP_NAME,
         error: String::new(),
@@ -80,15 +58,10 @@ pub async fn show_form(
 
 /// POST /app/projects — Create project, redirect to list.
 pub async fn create(
+    AuthenticatedSession(session): AuthenticatedSession,
     State(state): State<AppState>,
-    jar: CookieJar,
     Form(form): Form<CreateProjectForm>,
 ) -> Response {
-    let session = match require_session(&jar, &state.db).await {
-        Ok(s) => s,
-        Err(r) => return r.into_response(),
-    };
-
     if form.validate().is_err() {
         let template = CreateProjectTemplate {
             app_name: APP_NAME,
@@ -123,14 +96,9 @@ pub async fn create(
 
 /// GET /app/projects — List user's projects.
 pub async fn list(
+    AuthenticatedSession(session): AuthenticatedSession,
     State(state): State<AppState>,
-    jar: CookieJar,
 ) -> impl IntoResponse {
-    let session = match require_session(&jar, &state.db).await {
-        Ok(s) => s,
-        Err(r) => return r.into_response(),
-    };
-
     let projects = match db::projects::find_by_user_id(&state.db, &session.user_id).await {
         Ok(p) => p,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
@@ -145,15 +113,10 @@ pub async fn list(
 
 /// GET /app/projects/:id — Show project detail.
 pub async fn show(
+    AuthenticatedSession(session): AuthenticatedSession,
     State(state): State<AppState>,
-    jar: CookieJar,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let session = match require_session(&jar, &state.db).await {
-        Ok(s) => s,
-        Err(r) => return r.into_response(),
-    };
-
     let project = match db::projects::find_by_id(&state.db, &id).await {
         Ok(Some(p)) => p,
         Ok(None) => return (StatusCode::NOT_FOUND, "Project not found").into_response(),

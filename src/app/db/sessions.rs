@@ -4,7 +4,7 @@ use time::OffsetDateTime;
 use crate::app::domain::UserId;
 
 /// Database row for sessions table.
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, FromRow)]
 pub struct Session {
     pub id: String,
     pub user_id: String,

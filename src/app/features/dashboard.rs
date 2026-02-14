@@ -1,13 +1,11 @@
 use askama::Template;
 use axum::{
-    extract::State,
-    response::{IntoResponse, Redirect},
+    response::IntoResponse,
     routing::get,
     Router,
 };
-use axum_extra::extract::cookie::CookieJar;
 
-use crate::app::{db, AppState, APP_NAME};
+use crate::app::{session::AuthenticatedSession, AppState, APP_NAME};
 
 /// Dashboard page template.
 #[derive(Template)]
@@ -17,18 +15,7 @@ pub struct DashboardTemplate {
 }
 
 /// GET /app — Show dashboard. Requires a valid session; redirects to /login if unauthenticated.
-pub async fn show(State(state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
-    let session_id = match jar.get("session_id") {
-        Some(c) => c.value().to_string(),
-        None => return Redirect::to("/login").into_response(),
-    };
-
-    let session = match db::sessions::find_valid(&state.db, &session_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) | Err(_) => return Redirect::to("/login").into_response(),
-    };
-
-    let _ = session; // suppress unused warning; session proves authentication
+pub async fn show(AuthenticatedSession(_session): AuthenticatedSession) -> impl IntoResponse {
     DashboardTemplate {
         app_name: APP_NAME,
     }
