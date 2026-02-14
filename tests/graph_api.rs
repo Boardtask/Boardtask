@@ -383,3 +383,107 @@ async fn post_edge_404_when_node_not_in_project() {
     assert_eq!(body["error"], "Child node not found");
     }
 }
+
+mod get_graph {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_graph_requires_authentication() {
+        let pool = test_pool().await;
+        let app = test_router(pool);
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri("/api/projects/123/graph")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["error"], "Unauthorized");
+    }
+
+    #[tokio::test]
+    async fn get_graph_succeeds() {
+        let pool = test_pool().await;
+        let app = test_router(pool.clone());
+        ensure_graph_seeds(&pool).await;
+
+        let cookie = authenticated_cookie(&pool, &app, "getgraph@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+        // Create a project for the user
+        let project_id = ulid::Ulid::new().to_string();
+        let project = db::NewProject {
+            id: project_id.clone(),
+            title: "Test Project".to_string(),
+            user_id: user_id.clone(),
+        };
+        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+        // Create nodes in the project
+        let node1_id = ulid::Ulid::new().to_string();
+        let node1 = db::nodes::NewNode {
+            id: node1_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            title: "Node 1".to_string(),
+            description: Some("First node".to_string()),
+        };
+        boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
+
+        let node2_id = ulid::Ulid::new().to_string();
+        let node2 = db::nodes::NewNode {
+            id: node2_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            title: "Node 2".to_string(),
+            description: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();
+
+        // Create an edge
+        let edge = db::node_edges::NewNodeEdge {
+            parent_id: node1_id.clone(),
+            child_id: node2_id.clone(),
+        };
+        boardtask::app::db::node_edges::insert(&pool, &edge).await.unwrap();
+
+        // Get the graph
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+        // Check nodes
+        assert!(body["nodes"].is_array());
+        assert_eq!(body["nodes"].as_array().unwrap().len(), 2);
+
+        let node_titles: std::collections::HashSet<&str> = body["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["title"].as_str().unwrap())
+            .collect();
+        assert_eq!(node_titles, std::collections::HashSet::from(["Node 1", "Node 2"]));
+
+        // Check edges
+        assert!(body["edges"].is_array());
+        assert_eq!(body["edges"].as_array().unwrap().len(), 1);
+
+        let edge = &body["edges"][0];
+        assert_eq!(edge["parent_id"], node1_id);
+        assert_eq!(edge["child_id"], node2_id);
+    }
+}

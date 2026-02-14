@@ -2,7 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 /// Database row for node_edges table.
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, serde::Serialize)]
 pub struct NodeEdge {
     pub parent_id: String,
     pub child_id: String,
