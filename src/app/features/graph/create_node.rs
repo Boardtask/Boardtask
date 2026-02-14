@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
+use validator::Validate;
 
 use crate::app::{
     db,
@@ -15,10 +16,12 @@ use crate::app::{
 };
 
 /// Request body for creating a node.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateNodeRequest {
     pub node_type_id: String,
+    #[validate(length(min = 1, max = 255))]
     pub title: String,
+    #[validate(length(max = 2000))]
     pub description: Option<String>,
 }
 
@@ -34,25 +37,25 @@ pub struct NodeResponse {
     pub updated_at: Option<i64>,
 }
 
-/// POST /app/api/projects/:project_id/nodes — Create a new node.
+/// POST /api/projects/:project_id/nodes — Create a new node.
 pub async fn create_node(
     ApiAuthenticatedSession(session): ApiAuthenticatedSession,
     State(state): State<AppState>,
     Path(project_id): Path<String>,
     Json(request): Json<CreateNodeRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), AppError> {
+    // Validate request first (title 1-255, description max 2000) — no DB calls
+    request
+        .validate()
+        .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
+
     // Ensure user owns the project
-    let project = ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
+    let project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
 
     // Validate node_type_id exists
     let _node_type = db::node_types::find_by_id(&state.db, &request.node_type_id)
         .await?
         .ok_or_else(|| AppError::Validation("Invalid node_type_id".to_string()))?;
-
-    // Validate title length (1-255)
-    if request.title.is_empty() || request.title.len() > 255 {
-        return Err(AppError::Validation("Title must be 1-255 characters".to_string()));
-    }
 
     // Generate ULID for node
     let node_id = Ulid::new().to_string();
@@ -86,24 +89,7 @@ pub async fn create_node(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-/// Helper to ensure a user owns a project, returning NotFound if not found or not owned.
-async fn ensure_project_owned(
-    pool: &sqlx::SqlitePool,
-    project_id: &str,
-    user_id: &str,
-) -> Result<db::projects::Project, AppError> {
-    let project = db::projects::find_by_id(pool, project_id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Project not found".to_string()))?;
-
-    if project.user_id != user_id {
-        return Err(AppError::NotFound("Project not found".to_string()));
-    }
-
-    Ok(project)
-}
-
-/// Node API routes.
+/// Node creation routes.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/projects/:project_id/nodes", post(create_node))

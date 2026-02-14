@@ -28,7 +28,7 @@ pub struct EdgeResponse {
     pub created_at: i64,
 }
 
-/// POST /app/api/projects/:project_id/edges — Create a new edge.
+/// POST /api/projects/:project_id/edges — Create a new edge.
 pub async fn create_edge(
     ApiAuthenticatedSession(session): ApiAuthenticatedSession,
     State(state): State<AppState>,
@@ -36,7 +36,7 @@ pub async fn create_edge(
     Json(request): Json<CreateEdgeRequest>,
 ) -> Result<(StatusCode, Json<EdgeResponse>), AppError> {
     // Ensure user owns the project
-    let _project = ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
+    let _project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
 
     // Validate both nodes exist and belong to the project
     let parent_node = db::nodes::find_by_id(&state.db, &request.parent_id)
@@ -84,24 +84,7 @@ pub async fn create_edge(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-/// Helper to ensure a user owns a project, returning NotFound if not found or not owned.
-async fn ensure_project_owned(
-    pool: &sqlx::SqlitePool,
-    project_id: &str,
-    user_id: &str,
-) -> Result<db::projects::Project, AppError> {
-    let project = db::projects::find_by_id(pool, project_id)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Project not found".to_string()))?;
-
-    if project.user_id != user_id {
-        return Err(AppError::NotFound("Project not found".to_string()));
-    }
-
-    Ok(project)
-}
-
-/// Edge API routes.
+/// Edge creation routes.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/projects/:project_id/edges", post(create_edge))

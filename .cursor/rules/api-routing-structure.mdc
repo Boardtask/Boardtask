@@ -1,0 +1,17 @@
+---
+description: API routing structure and path conventions
+alwaysApply: true
+---
+
+# API Routing Structure
+
+**❌ NEVER**: `.route("/app/api/projects/...", handler)`
+
+**✅ ALWAYS**: `.route("/api/projects/...", handler)`
+
+## Key Rules
+
+1. **API routes start with `/api/`** - never `/app/api/`
+2. **App routes mount at root** - no `/app` prefix in definitions
+3. **Site routes handle `/`** - marketing pages
+4. **Comments must match actual routes**: `/// POST /api/projects/...`
