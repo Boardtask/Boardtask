@@ -21,6 +21,10 @@ pub fn test_router(pool: SqlitePool) -> axum::Router {
     create_router(state)
 }
 
+pub async fn ensure_graph_seeds(pool: &SqlitePool) {
+    boardtask::app::features::graph::sync_system_node_types(pool).await.unwrap();
+}
+
 pub fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
     format!(
         "email={}&password={}&confirm_password={}",

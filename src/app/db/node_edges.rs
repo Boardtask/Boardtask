@@ -79,3 +79,17 @@ pub async fn find_parents_of(
     .fetch_all(pool)
     .await
 }
+
+/// Find all edges for a project (where both parent and child nodes belong to the project).
+pub async fn find_by_project(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+) -> Result<Vec<NodeEdge>, sqlx::Error> {
+    sqlx::query_as::<_, NodeEdge>(
+        "SELECT e.parent_id, e.child_id, e.created_at FROM node_edges e INNER JOIN nodes p ON e.parent_id = p.id INNER JOIN nodes c ON e.child_id = c.id WHERE p.project_id = ? AND c.project_id = ? ORDER BY e.created_at",
+    )
+    .bind(project_id)
+    .bind(project_id)
+    .fetch_all(pool)
+    .await
+}

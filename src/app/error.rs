@@ -15,6 +15,9 @@ pub enum AppError {
     /// Authentication errors (400 Bad Request) - wrong credentials, etc.
     Auth(String),
 
+    /// Not found errors (404 Not Found) - resource not found
+    NotFound(String),
+
     /// Database errors (500 Internal Server Error)
     Database(SqlxError),
 
@@ -33,6 +36,7 @@ impl IntoResponse for AppError {
         let (status, message) = match self {
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::Auth(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::Database(err) => {
                 tracing::error!(%err, "database error");
                 (

@@ -94,3 +94,18 @@ pub async fn update(
 
     Ok(())
 }
+
+/// Delete a node by ID.
+pub async fn delete(
+    pool: &sqlx::SqlitePool,
+    id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM nodes WHERE id = ?",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
