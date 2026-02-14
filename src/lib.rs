@@ -1,4 +1,5 @@
 pub mod app;
+pub mod seeds;
 pub mod site;
 
 use axum::Router;

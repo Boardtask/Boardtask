@@ -46,6 +46,14 @@ migrate:
 	sqlx database create --database-url sqlite:$(APP_NAME).db
 	sqlx migrate run --database-url sqlite:$(APP_NAME).db
 
+# Run database seeds (uses DATABASE_URL from .env, default sqlite:boardtask.db)
+seed:
+	cargo run --bin seed
+
+# Force re-run all seeds
+seed-force:
+	cargo run --bin seed -- --force-all
+
 # Remove build artifacts and the local database
 clean:
 	cargo clean
