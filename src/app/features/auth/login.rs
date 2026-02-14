@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
     Form, routing::get, Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar};
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
 use validator::Validate;
@@ -50,6 +50,11 @@ async fn authenticate(
     let stored_hash = HashedPassword::from_string(user.password_hash);
     stored_hash.verify(password)
         .map_err(|_| AppError::Auth("Invalid email or password".to_string()))?;
+
+    // Check if email is verified
+    if user.email_verified_at.is_none() {
+        return Err(AppError::Auth("Please verify your email before signing in. Check your inbox for the verification link.".to_string()));
+    }
 
     // Parse user ID
     let user_id = UserId::from_string(&user.id)
@@ -106,17 +111,7 @@ pub async fn submit(
     // Authenticate
     match authenticate(&state.db, &email, &password).await {
         Ok(session_id) => {
-            // Set session cookie
-            let cookie = Cookie::build(("session_id", session_id))
-                .http_only(true)
-                .same_site(axum_extra::extract::cookie::SameSite::Lax)
-                .path("/")
-                .build();
-
-            let jar = jar.add(cookie);
-
-            // Redirect to dashboard
-            Ok((jar, Redirect::to("/app")))
+            Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to("/app")))
         }
         Err(AppError::Auth(msg)) => {
             let template = LoginTemplate {

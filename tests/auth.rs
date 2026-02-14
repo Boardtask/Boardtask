@@ -50,13 +50,13 @@ mod auth {
         let response = app.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
-        assert_eq!(
-            response.headers().get("location").map(|v| v.to_str().unwrap()),
-            Some("/app")
+        assert!(
+            response.headers().get("location").map(|v| v.to_str().unwrap()).unwrap().starts_with("/check-email"),
+            "Expected redirect to /check-email on successful signup"
         );
         assert!(
-            response.headers().get("set-cookie").is_some(),
-            "Expected Set-Cookie header on successful signup"
+            response.headers().get("set-cookie").is_none(),
+            "Should NOT have Set-Cookie header on successful signup (no session created)"
         );
     }
 
@@ -121,22 +121,35 @@ mod auth {
         )
     }
 
+    async fn create_verified_user(pool: &sqlx::SqlitePool, email: &str, password: &str) {
+        use boardtask::app::domain::{Email, Password, HashedPassword, UserId};
+        use boardtask::app::db;
+
+        let email = Email::new(email.to_string()).unwrap();
+        let password = Password::new(password.to_string()).unwrap();
+        let password_hash = HashedPassword::from_password(&password).unwrap();
+        let user_id = UserId::new();
+
+        let new_user = db::NewUser {
+            id: user_id.clone(),
+            email: email.clone(),
+            password_hash,
+        };
+
+        // Insert user
+        db::insert(pool, &new_user).await.unwrap();
+
+        // Mark as verified
+        db::mark_verified(pool, &user_id).await.unwrap();
+    }
+
     #[tokio::test]
     async fn valid_credentials_redirect_to_dashboard() {
         let pool = test_pool().await;
-        let app = test_router(pool);
+        let app = test_router(pool.clone());
 
-        // Sign up first
-        let signup_body =
-            signup_form_body("login@example.com", "Password123", "Password123");
-        let signup_request = http::Request::builder()
-            .method("POST")
-            .uri("/signup")
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(Body::from(signup_body))
-            .unwrap();
-        let signup_response = app.clone().oneshot(signup_request).await.unwrap();
-        assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
+        // Create a verified user directly (bypassing signup flow for this test)
+        create_verified_user(&pool, "login@example.com", "Password123").await;
 
         // Then log in
         let login_body = login_form_body("login@example.com", "Password123");
@@ -185,9 +198,50 @@ mod auth {
     }
 
     #[tokio::test]
-    async fn signup_then_login_succeeds() {
+    async fn login_unverified_returns_error() {
         let pool = test_pool().await;
         let app = test_router(pool);
+
+        // Sign up (creates unverified user)
+        let signup_body = signup_form_body("unverified@example.com", "Password123", "Password123");
+        let signup_request = http::Request::builder()
+            .method("POST")
+            .uri("/signup")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(signup_body))
+            .unwrap();
+        let signup_response = app.clone().oneshot(signup_request).await.unwrap();
+        assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
+
+        // Try to log in (should fail)
+        let login_body = login_form_body("unverified@example.com", "Password123");
+        let login_request = http::Request::builder()
+            .method("POST")
+            .uri("/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(login_body))
+            .unwrap();
+        let login_response = app.oneshot(login_request).await.unwrap();
+
+        assert_eq!(login_response.status(), StatusCode::OK);
+        assert!(
+            login_response.headers().get("set-cookie").is_none(),
+            "Should NOT have Set-Cookie header when login fails"
+        );
+
+        let body_bytes = login_response.into_body().collect().await.unwrap().to_bytes();
+        let body_str = String::from_utf8_lossy(&body_bytes);
+        assert!(
+            body_str.contains("verify your email"),
+            "Expected email verification error, got: {}",
+            body_str
+        );
+    }
+
+    #[tokio::test]
+    async fn signup_then_verify_then_login_succeeds() {
+        let pool = test_pool().await;
+        let app = test_router(pool.clone());
 
         // Sign up
         let signup_body =
@@ -205,6 +259,25 @@ mod auth {
             "Signup should succeed"
         );
 
+        // Get the verification token from the database
+        let token: String = sqlx::query_scalar("SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        // Verify the email
+        let verify_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/verify-email?token={}", token))
+            .body(Body::empty())
+            .unwrap();
+        let verify_response = app.clone().oneshot(verify_request).await.unwrap();
+        assert_eq!(
+            verify_response.status(),
+            StatusCode::SEE_OTHER,
+            "Email verification should succeed"
+        );
+
         // Login with same credentials
         let login_body = login_form_body("flow@example.com", "Secretpass99");
         let login_request = http::Request::builder()
@@ -218,7 +291,7 @@ mod auth {
         assert_eq!(
             login_response.status(),
             StatusCode::SEE_OTHER,
-            "Login after signup should succeed"
+            "Login after verification should succeed"
         );
         assert_eq!(
             login_response.headers().get("location").map(|v| v.to_str().unwrap()),
@@ -240,6 +313,14 @@ mod auth {
                 urlencoding::encode(email),
                 urlencoding::encode(password),
                 urlencoding::encode(confirm_password)
+            )
+        }
+
+        fn login_form_body(email: &str, password: &str) -> String {
+            format!(
+                "email={}&password={}",
+                urlencoding::encode(email),
+                urlencoding::encode(password)
             )
         }
 
@@ -271,7 +352,7 @@ mod auth {
             let pool = test_pool().await;
             let app = test_router(pool.clone());
 
-            // Sign up to get a session
+            // Sign up and verify to get a session
             let signup_body = signup_form_body("logout@example.com", "Password123", "Password123");
             let signup_request = http::Request::builder()
                 .method("POST")
@@ -282,8 +363,32 @@ mod auth {
             let signup_response = app.clone().oneshot(signup_request).await.unwrap();
             assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
 
-            // Extract session cookie
-            let set_cookie = signup_response.headers()
+            // Verify the email
+            let token: String = sqlx::query_scalar("SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let verify_request = http::Request::builder()
+                .method("GET")
+                .uri(&format!("/verify-email?token={}", token))
+                .body(Body::empty())
+                .unwrap();
+            let verify_response = app.clone().oneshot(verify_request).await.unwrap();
+            assert_eq!(verify_response.status(), StatusCode::SEE_OTHER);
+
+            // Login to get session cookie
+            let login_body = login_form_body("logout@example.com", "Password123");
+            let login_request = http::Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(login_body))
+                .unwrap();
+            let login_response = app.clone().oneshot(login_request).await.unwrap();
+            assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
+
+            // Extract session cookie from login response
+            let set_cookie = login_response.headers()
                 .get("set-cookie")
                 .unwrap()
                 .to_str()
@@ -345,6 +450,14 @@ mod auth {
         use http_body_util::BodyExt;
         use tower::ServiceExt;
 
+        fn login_form_body(email: &str, password: &str) -> String {
+            format!(
+                "email={}&password={}",
+                urlencoding::encode(email),
+                urlencoding::encode(password)
+            )
+        }
+
         #[tokio::test]
         async fn dashboard_requires_authentication() {
             let pool = test_pool().await;
@@ -367,9 +480,9 @@ mod auth {
         #[tokio::test]
         async fn dashboard_renders_with_logout_form() {
             let pool = test_pool().await;
-            let app = test_router(pool);
+            let app = test_router(pool.clone());
 
-            // Sign up to get a session (dashboard requires authentication)
+            // Sign up and verify to get authenticated access to dashboard
             let signup_body = signup_form_body("dashboard@example.com", "Password123", "Password123");
             let signup_request = http::Request::builder()
                 .method("POST")
@@ -380,7 +493,31 @@ mod auth {
             let signup_response = app.clone().oneshot(signup_request).await.unwrap();
             assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
 
-            let set_cookie = signup_response
+            // Get verification token and verify
+            let token: String = sqlx::query_scalar("SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let verify_request = http::Request::builder()
+                .method("GET")
+                .uri(&format!("/verify-email?token={}", token))
+                .body(Body::empty())
+                .unwrap();
+            let verify_response = app.clone().oneshot(verify_request).await.unwrap();
+            assert_eq!(verify_response.status(), StatusCode::SEE_OTHER);
+
+            // Login to get session
+            let login_body = login_form_body("dashboard@example.com", "Password123");
+            let login_request = http::Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(login_body))
+                .unwrap();
+            let login_response = app.clone().oneshot(login_request).await.unwrap();
+            assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
+
+            let set_cookie = login_response
                 .headers()
                 .get("set-cookie")
                 .unwrap()
@@ -388,6 +525,7 @@ mod auth {
                 .unwrap();
             let session_id = extract_session_id_from_cookie(set_cookie).unwrap();
 
+            // Now access dashboard with valid session
             let request = http::Request::builder()
                 .method("GET")
                 .uri("/app")

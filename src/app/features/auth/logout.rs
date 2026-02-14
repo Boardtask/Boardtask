@@ -3,7 +3,7 @@ use axum::{
     response::Redirect,
     routing::post, Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar};
+use axum_extra::extract::cookie::CookieJar;
 
 use crate::app::{
     db,
@@ -24,10 +24,7 @@ pub async fn submit(
             .map_err(AppError::Database)?;
     }
 
-    let clear_cookie = Cookie::build(("session_id", ""))
-        .path("/")
-        .removal();
-    let jar = jar.add(clear_cookie);
+    let jar = jar.add(crate::app::session::clear_session_cookie());
 
     // Redirect to home
     Ok((jar, Redirect::to("/")))

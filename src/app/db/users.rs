@@ -11,6 +11,7 @@ pub struct User {
     pub password_hash: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub email_verified_at: Option<i64>,
 }
 
 /// Data structure for inserting a new user.
@@ -26,11 +27,42 @@ pub async fn find_by_email(
     email: &Email,
 ) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at, updated_at FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at FROM users WHERE email = ?",
     )
     .bind(email.as_str())
     .fetch_optional(pool)
     .await
+}
+
+/// Find a user by ID.
+pub async fn find_by_id(
+    pool: &sqlx::SqlitePool,
+    user_id: &UserId,
+) -> Result<Option<User>, sqlx::Error> {
+    sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at FROM users WHERE id = ?",
+    )
+    .bind(user_id.as_str())
+    .fetch_optional(pool)
+    .await
+}
+
+/// Mark a user's email as verified.
+pub async fn mark_verified<'e, E>(
+    executor: E,
+    user_id: &UserId,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("UPDATE users SET email_verified_at = ?, updated_at = ? WHERE id = ?")
+        .bind(now)
+        .bind(now)
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
 }
 
 /// Insert a new user into the database.
@@ -44,7 +76,7 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, email, password_hash, created_at, updated_at, email_verified_at) VALUES (?, ?, ?, ?, ?, NULL)",
     )
     .bind(user.id.as_str())
     .bind(user.email.as_str())

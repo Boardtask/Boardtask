@@ -22,6 +22,12 @@ pub enum AppError {
     Internal,
 }
 
+impl From<SqlxError> for AppError {
+    fn from(err: SqlxError) -> Self {
+        AppError::Database(err)
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {

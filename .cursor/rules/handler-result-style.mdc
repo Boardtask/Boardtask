@@ -1,0 +1,12 @@
+---
+description: No nested match for Result handling in HTTP handlers
+globs: src/app/**/*.rs
+alwaysApply: false
+---
+
+# HTTP Handler Result Style
+
+- Use `?` for fallible ops. Return `Result<impl IntoResponse, AppError>`.
+- No nested `match`, no templates in match branches.
+- Transactions linear with `?`. Max nesting: 2 levels.
+- Extract logic when indentation exceeds 2 levels.

@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
     Form, routing::get, Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar};
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
 use validator::Validate;
@@ -13,6 +13,7 @@ use crate::app::{
     db,
     domain::{Email, Password, HashedPassword, UserId},
     error::AppError,
+    mail::EmailMessage,
     AppState, APP_NAME,
 };
 
@@ -38,12 +39,12 @@ pub struct SignupTemplate {
     pub email: String,
 }
 
-/// Create a new user account. Returns the session ID on success.
+/// Create a new user account and verification token. Returns (user_id, token) on success.
 async fn create_account(
     pool: &sqlx::SqlitePool,
     email: &Email,
     password: &Password,
-) -> Result<String, AppError> {
+) -> Result<(UserId, String), AppError> {
     // Check if email already exists
     if let Some(_) = db::find_by_email(pool, email).await.map_err(AppError::Database)? {
         return Err(AppError::Auth("Unable to create account. If you already have an account, please log in.".to_string()));
@@ -58,7 +59,7 @@ async fn create_account(
 
     // Create new user
     let new_user = db::NewUser {
-        id: user_id,
+        id: user_id.clone(),
         email: email.clone(),
         password_hash,
     };
@@ -67,15 +68,15 @@ async fn create_account(
 
     db::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
 
-    // Create session (30 days)
-    let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
-    let session_id = db::create(&mut *tx, &new_user.id, expires_at)
-        .await
-        .map_err(AppError::Database)?;
+    // Generate verification token
+    let token = UserId::new().as_str();
+    let expires_at = OffsetDateTime::now_utc() + Duration::hours(24);
+    db::email_verification::insert_token(&mut *tx, &new_user.id, &token, expires_at)
+        .await.map_err(AppError::Database)?;
 
     tx.commit().await.map_err(AppError::Database)?;
 
-    Ok(session_id)
+    Ok((user_id, token))
 }
 
 /// GET /signup — Show signup form.
@@ -130,18 +131,24 @@ pub async fn submit(
 
     // Create account
     match create_account(&state.db, &email, &password).await {
-        Ok(session_id) => {
-            // Set session cookie
-            let cookie = Cookie::build(("session_id", session_id))
-                .http_only(true)
-                .same_site(axum_extra::extract::cookie::SameSite::Lax)
-                .path("/")
-                .build();
-
-            let jar = jar.add(cookie);
-
-            // Redirect to dashboard
-            Ok((jar, Redirect::to("/app")))
+        Ok((_user_id, token)) => {
+            let base = std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into());
+            let url = format!("{}/verify-email?token={}", base.trim_end_matches('/'), token);
+            match state.mail.send(&EmailMessage::new(
+                email.clone(),
+                "Verify your email".to_string(),
+                format!("Click here to verify your account: {}", url),
+            )).await {
+                Ok(()) => Ok((jar, Redirect::to(&format!("/check-email?email={}", email.as_str())))),
+                Err(_) => {
+                    let template = SignupTemplate {
+                        app_name: APP_NAME,
+                        error: "Failed to send verification email.".to_string(),
+                        email: form.email.clone(),
+                    };
+                    Err(Html(template.render().map_err(|_| "Template error".to_string())?))
+                }
+            }
         }
         Err(AppError::Auth(msg)) => {
             let template = SignupTemplate {
