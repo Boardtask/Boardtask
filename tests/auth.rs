@@ -222,4 +222,116 @@ mod auth {
         );
     }
     }
+
+    mod logout {
+        use super::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use tower::ServiceExt;
+
+        fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
+            format!(
+                "email={}&password={}&confirm_password={}",
+                urlencoding::encode(email),
+                urlencoding::encode(password),
+                urlencoding::encode(confirm_password)
+            )
+        }
+
+        fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
+            // Parse "session_id=abc123; Path=/; HttpOnly; SameSite=Lax"
+            set_cookie_header.split(';').next()?.strip_prefix("session_id=")
+        }
+
+        #[tokio::test]
+        async fn logout_clears_session_and_redirects() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            // Sign up to get a session
+            let signup_body = signup_form_body("logout@example.com", "Password123", "Password123");
+            let signup_request = http::Request::builder()
+                .method("POST")
+                .uri("/signup")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(signup_body))
+                .unwrap();
+            let signup_response = app.clone().oneshot(signup_request).await.unwrap();
+            assert_eq!(signup_response.status(), StatusCode::SEE_OTHER);
+
+            // Extract session cookie
+            let set_cookie = signup_response.headers()
+                .get("set-cookie")
+                .unwrap()
+                .to_str()
+                .unwrap();
+            let session_id = extract_session_id_from_cookie(set_cookie).unwrap();
+
+            // Logout with session cookie
+            let logout_request = http::Request::builder()
+                .method("POST")
+                .uri("/logout")
+                .header("cookie", format!("session_id={}", session_id))
+                .body(Body::empty())
+                .unwrap();
+            let logout_response = app.oneshot(logout_request).await.unwrap();
+
+            assert_eq!(logout_response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                logout_response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/")
+            );
+            // Should have a Set-Cookie header to clear the session
+            assert!(logout_response.headers().get("set-cookie").is_some());
+        }
+
+        #[tokio::test]
+        async fn logout_without_cookie_redirects() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/logout")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/")
+            );
+        }
+    }
+
+    mod dashboard {
+        use super::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+
+        #[tokio::test]
+        async fn dashboard_renders_with_logout_form() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/app")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("Log Out") || body_str.contains("action=\"/logout\""),
+                "Expected logout form or button in dashboard, got: {}",
+                body_str
+            );
+        }
+    }
 }

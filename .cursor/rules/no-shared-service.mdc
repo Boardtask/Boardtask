@@ -1,0 +1,10 @@
+---
+description: Prefer in-slice logic over shared service.rs in vertical slices
+globs: src/app/features/**/*
+---
+
+# No Shared Service Layers
+
+Don't create `service.rs` or `services/` files — they are horizontal layers that cut across slices.
+
+If a function is used by only one slice, keep it private within that slice. Only extract a shared module when multiple slices genuinely need the same logic.

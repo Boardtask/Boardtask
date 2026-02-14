@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8">
+    <h1 class="text-2xl font-bold mb-6">Welcome to your dashboard!</h1>
+
+    <form method="post" action="/logout" class="mb-4">
+        <button
+            type="submit"
+            class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+        >
+            Log Out
+        </button>
+    </form>
+
+    <p class="text-center">
+        <a href="/" class="text-blue-600 hover:text-blue-500">Back to home</a>
+    </p>
+</div>
+{% endblock %}

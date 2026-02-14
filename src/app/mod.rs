@@ -15,22 +15,7 @@ pub struct AppState {
 pub fn routes(_state: AppState) -> Router<AppState> {
     Router::new()
         .merge(features::auth::routes())
-        .route("/app", axum::routing::get(dashboard))
-}
-
-/// Placeholder dashboard handler.
-async fn dashboard() -> axum::response::Html<&'static str> {
-    axum::response::Html(r#"
-        <!DOCTYPE html>
-        <html>
-        <head><title>Dashboard</title></head>
-        <body>
-            <h1>Welcome to your dashboard!</h1>
-            <p>This is a placeholder dashboard. Authentication successful!</p>
-            <a href="/">Back to home</a>
-        </body>
-        </html>
-    "#)
+        .merge(features::dashboard::routes())
 }
 
 pub mod domain;

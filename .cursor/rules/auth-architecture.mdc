@@ -9,8 +9,7 @@ Authentication lives under `src/app/`:
 
 - **Domain types**: `src/app/domain/` — `Email`, `Password`, `HashedPassword`, `UserId`
 - **Database layer**: `src/app/db/` — User and session persistence with parameterized queries
-- **Service layer**: `src/app/features/auth/service.rs` — Orchestrates signup/login logic
-- **Feature slices**: `src/app/features/auth/signup.rs` and `src/app/features/auth/login.rs`
+- **Feature slices**: `src/app/features/auth/signup.rs` and `src/app/features/auth/login.rs` — Each slice owns its form, template, handlers, and business logic
 - **Error handling**: `src/app/error.rs` — Unified error responses
 
 We use:

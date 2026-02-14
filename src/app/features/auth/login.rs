@@ -6,14 +6,15 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::Deserialize;
+use time::{Duration, OffsetDateTime};
 use validator::Validate;
 
 use crate::app::{
-    domain::{Email, Password},
+    db,
+    domain::{Email, Password, HashedPassword, UserId},
     error::AppError,
     AppState, APP_NAME,
 };
-use crate::app::features::auth::service;
 
 /// Login form data from HTTP request.
 #[derive(Debug, Deserialize, Validate)]
@@ -31,6 +32,36 @@ pub struct LoginForm {
 pub struct LoginTemplate {
     pub app_name: &'static str,
     pub error: String,
+}
+
+/// Authenticate a user. Returns the session ID on success.
+async fn authenticate(
+    pool: &sqlx::SqlitePool,
+    email: &Email,
+    password: &Password,
+) -> Result<String, AppError> {
+    // Find user by email
+    let user = db::find_by_email(pool, email)
+        .await
+        .map_err(AppError::Database)?
+        .ok_or_else(|| AppError::Auth("Invalid email or password".to_string()))?;
+
+    // Verify password
+    let stored_hash = HashedPassword::from_string(user.password_hash);
+    stored_hash.verify(password)
+        .map_err(|_| AppError::Auth("Invalid email or password".to_string()))?;
+
+    // Parse user ID
+    let user_id = UserId::from_string(&user.id)
+        .map_err(|_| AppError::Internal)?;
+
+    // Create session (30 days)
+    let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
+    let session_id = db::create(pool, &user_id, expires_at)
+        .await
+        .map_err(AppError::Database)?;
+
+    Ok(session_id)
 }
 
 /// GET /login — Show login form.
@@ -72,8 +103,8 @@ pub async fn submit(
     // Strength rules apply at signup, not login (legacy accounts may have weaker passwords).
     let password = Password::for_verification(form.password);
 
-    // Call service
-    match service::login(&state.db, &email, &password).await {
+    // Authenticate
+    match authenticate(&state.db, &email, &password).await {
         Ok(session_id) => {
             // Set session cookie
             let cookie = Cookie::build(("session_id", session_id))

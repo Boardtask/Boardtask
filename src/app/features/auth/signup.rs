@@ -6,14 +6,15 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::Deserialize;
+use time::{Duration, OffsetDateTime};
 use validator::Validate;
 
 use crate::app::{
-    domain::{Email, Password},
+    db,
+    domain::{Email, Password, HashedPassword, UserId},
     error::AppError,
     AppState, APP_NAME,
 };
-use crate::app::features::auth::service;
 
 /// Signup form data from HTTP request.
 #[derive(Debug, Deserialize, Validate)]
@@ -35,6 +36,46 @@ pub struct SignupTemplate {
     pub app_name: &'static str,
     pub error: String,
     pub email: String,
+}
+
+/// Create a new user account. Returns the session ID on success.
+async fn create_account(
+    pool: &sqlx::SqlitePool,
+    email: &Email,
+    password: &Password,
+) -> Result<String, AppError> {
+    // Check if email already exists
+    if let Some(_) = db::find_by_email(pool, email).await.map_err(AppError::Database)? {
+        return Err(AppError::Auth("Unable to create account. If you already have an account, please log in.".to_string()));
+    }
+
+    // Hash the password
+    let password_hash = HashedPassword::from_password(password)
+        .map_err(|_| AppError::Internal)?;
+
+    // Generate user ID
+    let user_id = UserId::new();
+
+    // Create new user
+    let new_user = db::NewUser {
+        id: user_id,
+        email: email.clone(),
+        password_hash,
+    };
+
+    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+
+    db::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
+
+    // Create session (30 days)
+    let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
+    let session_id = db::create(&mut *tx, &new_user.id, expires_at)
+        .await
+        .map_err(AppError::Database)?;
+
+    tx.commit().await.map_err(AppError::Database)?;
+
+    Ok(session_id)
 }
 
 /// GET /signup — Show signup form.
@@ -87,8 +128,8 @@ pub async fn submit(
         }
     };
 
-    // Call service
-    match service::signup(&state.db, &email, &password).await {
+    // Create account
+    match create_account(&state.db, &email, &password).await {
         Ok(session_id) => {
             // Set session cookie
             let cookie = Cookie::build(("session_id", session_id))
