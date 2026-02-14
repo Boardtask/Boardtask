@@ -27,7 +27,7 @@ pub async fn submit(
     let clear_cookie = Cookie::build(("session_id", ""))
         .path("/")
         .removal();
-    let jar = jar.remove(clear_cookie);
+    let jar = jar.add(clear_cookie);
 
     // Redirect to home
     Ok((jar, Redirect::to("/")))

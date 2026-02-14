@@ -230,6 +230,7 @@ mod auth {
     mod logout {
         use super::common::*;
         use axum::body::Body;
+        use boardtask::app::db;
         use http::StatusCode;
         use tower::ServiceExt;
 
@@ -247,10 +248,28 @@ mod auth {
             set_cookie_header.split(';').next()?.strip_prefix("session_id=")
         }
 
+        /// Asserts that among all Set-Cookie headers, one is a removal cookie (Max-Age=0) for session_id.
+        fn assert_removal_cookie_in_response<B>(response: &http::Response<B>) {
+            let cookies: Vec<_> = response
+                .headers()
+                .get_all("set-cookie")
+                .iter()
+                .filter_map(|v| v.to_str().ok())
+                .collect();
+            assert!(
+                cookies.iter().any(|c| {
+                    let c_lower = c.to_lowercase();
+                    c.contains("session_id=") && c_lower.contains("max-age=0")
+                }),
+                "Expected removal cookie for session_id with Max-Age=0 among Set-Cookie headers, got: {:?}",
+                cookies
+            );
+        }
+
         #[tokio::test]
         async fn logout_clears_session_and_redirects() {
             let pool = test_pool().await;
-            let app = test_router(pool);
+            let app = test_router(pool.clone());
 
             // Sign up to get a session
             let signup_body = signup_form_body("logout@example.com", "Password123", "Password123");
@@ -285,12 +304,20 @@ mod auth {
                 logout_response.headers().get("location").map(|v| v.to_str().unwrap()),
                 Some("/")
             );
-            // Should have a Set-Cookie header to clear the session
-            assert!(logout_response.headers().get("set-cookie").is_some());
+            assert_removal_cookie_in_response(&logout_response);
+
+            // Verify session was deleted from DB (complete logout contract)
+            assert!(
+                db::sessions::find_valid(&pool, session_id).await.unwrap().is_none(),
+                "Session should be removed from database on logout"
+            );
         }
 
         #[tokio::test]
-        async fn logout_without_cookie_redirects() {
+        async fn logout_without_cookie_sends_removal_cookie() {
+            // Logout without a session cookie must still send Set-Cookie to clear any stale
+            // session_id in the browser. jar.remove() would not add to delta when there's
+            // no original cookie - this test catches that bug.
             let pool = test_pool().await;
             let app = test_router(pool);
 
@@ -306,6 +333,7 @@ mod auth {
                 response.headers().get("location").map(|v| v.to_str().unwrap()),
                 Some("/")
             );
+            assert_removal_cookie_in_response(&response);
         }
     }
 
