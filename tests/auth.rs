@@ -13,6 +13,7 @@ mod auth {
         let state = boardtask::app::AppState {
             db: pool,
             mail: std::sync::Arc::new(boardtask::app::mail::ConsoleMailer),
+            config: boardtask::app::config::Config::for_tests(),
         };
         create_router(state)
     }
@@ -541,6 +542,124 @@ mod auth {
                 body_str.contains("Log Out") || body_str.contains("action=\"/logout\""),
                 "Expected logout form or button in dashboard, got: {}",
                 body_str
+            );
+        }
+    }
+
+    mod password_reset {
+        use super::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+
+        fn forgot_password_form_body(email: &str) -> String {
+            format!("email={}", urlencoding::encode(email))
+        }
+
+        #[tokio::test]
+        async fn forgot_password_unknown_email_returns_success() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let body = forgot_password_form_body("unknown@example.com");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/forgot-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("If an account exists for that email"),
+                "Expected success message, got: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn forgot_password_known_email_returns_success() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            // First create a user
+            let signup_body = format!(
+                "email={}&password={}&confirm_password={}",
+                urlencoding::encode("reset-test@example.com"),
+                urlencoding::encode("Password123"),
+                urlencoding::encode("Password123")
+            );
+            let signup_request = http::Request::builder()
+                .method("POST")
+                .uri("/signup")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(signup_body))
+                .unwrap();
+            let _ = app.clone().oneshot(signup_request).await.unwrap();
+
+            // Now try forgot password
+            let body = forgot_password_form_body("reset-test@example.com");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/forgot-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("If an account exists for that email"),
+                "Expected success message, got: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn reset_password_invalid_token_redirects() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/reset-password?token=invalidtoken")
+                .body(Body::empty())
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/forgot-password?error=invalid")
+            );
+        }
+
+        #[tokio::test]
+        async fn reset_password_missing_token_redirects() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/reset-password")
+                .body(Body::empty())
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/forgot-password?error=invalid")
             );
         }
     }

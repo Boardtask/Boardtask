@@ -275,6 +275,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "dotenvy",
+ "hex",
  "http",
  "http-body-util",
  "lettre",

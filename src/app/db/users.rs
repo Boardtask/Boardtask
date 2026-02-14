@@ -65,6 +65,25 @@ where
     Ok(())
 }
 
+/// Update a user's password hash.
+pub async fn update_password<'e, E>(
+    executor: E,
+    user_id: &UserId,
+    password_hash: &HashedPassword,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?")
+        .bind(password_hash.as_str())
+        .bind(now)
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 /// Insert a new user into the database.
 pub async fn insert<'e, E>(
     executor: E,

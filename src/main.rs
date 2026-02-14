@@ -19,13 +19,15 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Connect to SQLite
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+    // Load config from environment
+    let config = app::config::Config::from_env()
+        .expect("Failed to load config (check DATABASE_URL and other env vars)");
 
+    // Connect to SQLite
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(3))
-        .connect(&database_url)
+        .connect(&config.database_url)
         .await
         .expect("Failed to connect to database");
 
@@ -46,15 +48,19 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
-    // Build the mail adapter
-    let mail = app::mail::from_env()
+    // Build the mail adapter from config
+    let mail = app::mail::from_config(&config)
         .unwrap_or_else(|e| {
             tracing::error!("Failed to initialize mail adapter: {}", e);
             std::process::exit(1);
         });
 
     // Build the application state
-    let state = app::AppState { db: pool, mail };
+    let state = app::AppState {
+        db: pool,
+        mail,
+        config,
+    };
     let router = boardtask::create_router(state);
 
     // Start the server

@@ -38,6 +38,9 @@ async-trait = "0.1"
 lettre = { version = "0.11", default-features = false, features = ["tokio1", "tokio1-native-tls", "builder", "smtp-transport"] }
 thiserror = "1.0"
 
+# Token generation
+hex = "0.4"
+
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"

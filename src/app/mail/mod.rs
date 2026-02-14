@@ -10,13 +10,18 @@ pub struct EmailMessage {
 }
 
 impl EmailMessage {
-    /// Create a new email message with default from address (reads MAIL_FROM env var).
-    pub fn new(to: crate::app::domain::Email, subject: String, body: String) -> Self {
+    /// Create a new email message with the given from address.
+    pub fn new(
+        to: crate::app::domain::Email,
+        subject: String,
+        body: String,
+        from: impl Into<String>,
+    ) -> Self {
         Self {
             to,
             subject,
             body,
-            from: default_from(),
+            from: from.into(),
         }
     }
 
@@ -50,34 +55,27 @@ pub use smtp::SmtpMailer;
 mod console;
 mod smtp;
 
-/// Default from/reply address for emails. Reads MAIL_FROM env var.
-pub fn default_from() -> String {
-    std::env::var("MAIL_FROM").unwrap_or_else(|_| "please-configure@example.com".to_string())
-}
-
-/// Build the email sender from environment variables.
-///
-/// Reads `MAIL_ADAPTER` (default: "console") and returns the appropriate implementation.
-/// For SMTP, also reads `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`.
-/// The from address is read from `MAIL_FROM` (used by all adapters).
-pub fn from_env() -> Result<Arc<dyn EmailSender>, EmailError> {
-    let adapter = std::env::var("MAIL_ADAPTER").unwrap_or_else(|_| "console".to_string());
-
-    match adapter.as_str() {
+/// Build the email sender from config.
+pub fn from_config(config: &crate::app::config::Config) -> Result<Arc<dyn EmailSender>, EmailError> {
+    match config.mail_adapter.as_str() {
         "console" => Ok(Arc::new(ConsoleMailer)),
         "smtp" => {
-            let host = std::env::var("SMTP_HOST")
-                .map_err(|_| EmailError::Config("SMTP_HOST is required for SMTP adapter".to_string()))?;
-            let port = std::env::var("SMTP_PORT")
-                .unwrap_or_else(|_| "587".to_string())
-                .parse::<u16>()
-                .map_err(|_| EmailError::Config("SMTP_PORT must be a valid port number".to_string()))?;
-            let user = std::env::var("SMTP_USER").ok();
-            let pass = std::env::var("SMTP_PASS").ok();
-            let from = default_from();
+            let host = config
+                .smtp_host
+                .clone()
+                .ok_or_else(|| EmailError::Config("SMTP_HOST is required for SMTP adapter".to_string()))?;
 
-            Ok(Arc::new(SmtpMailer::new(host, port, user, pass, from)?))
+            Ok(Arc::new(SmtpMailer::new(
+                host,
+                config.smtp_port,
+                config.smtp_user.clone(),
+                config.smtp_pass.clone(),
+                config.mail_from.clone(),
+            )?))
         }
-        _ => Err(EmailError::Config(format!("Unknown MAIL_ADAPTER: {}", adapter))),
+        _ => Err(EmailError::Config(format!(
+            "Unknown MAIL_ADAPTER: {}",
+            config.mail_adapter
+        ))),
     }
 }

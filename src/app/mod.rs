@@ -11,6 +11,7 @@ pub const APP_NAME: &str = "Boardtask";
 pub struct AppState {
     pub db: SqlitePool,
     pub mail: Arc<dyn crate::app::mail::EmailSender>,
+    pub config: crate::app::config::Config,
 }
 
 /// App routes (auth, dashboard). Merged with site routes in main.rs.
@@ -20,6 +21,7 @@ pub fn routes(_state: AppState) -> Router<AppState> {
         .merge(features::dashboard::routes())
 }
 
+pub mod config;
 pub mod domain;
 pub mod db;
 pub mod session;

@@ -2,6 +2,7 @@ pub mod signup;
 pub mod login;
 pub mod logout;
 pub mod verify_email;
+pub mod password_reset;
 
 use axum::Router;
 use crate::app::AppState;
@@ -13,4 +14,5 @@ pub fn routes() -> Router<AppState> {
         .merge(login::routes())
         .merge(logout::routes())
         .merge(verify_email::routes())
+        .merge(password_reset::routes())
 }

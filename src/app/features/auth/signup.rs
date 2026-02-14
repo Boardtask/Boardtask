@@ -132,12 +132,12 @@ pub async fn submit(
     // Create account
     match create_account(&state.db, &email, &password).await {
         Ok((_user_id, token)) => {
-            let base = std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into());
-            let url = format!("{}/verify-email?token={}", base.trim_end_matches('/'), token);
+            let url = format!("{}/verify-email?token={}", state.config.app_url_base(), token);
             match state.mail.send(&EmailMessage::new(
                 email.clone(),
                 "Verify your email".to_string(),
                 format!("Click here to verify your account: {}", url),
+                state.config.mail_from.clone(),
             )).await {
                 Ok(()) => Ok((jar, Redirect::to(&format!("/check-email?email={}", email.as_str())))),
                 Err(_) => {
