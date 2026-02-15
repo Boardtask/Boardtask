@@ -10,7 +10,7 @@ To quickly test the application with a verified account, follow these steps:
 ### 1. Sign Up
 Go to [https://boardtask.local/signup](https://boardtask.local/signup) and create a test account.
 - **Example Email**: `test@example.com`
-- **Example Password**: `123`
+- **Example Password**: `Password123`
 
 ### 2. Retrieve Verification Token
 The application sends a verification email, but in development, you can grab the token directly from the SQLite database.

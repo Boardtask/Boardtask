@@ -5,12 +5,14 @@ const registerGraph = () => {
 
     if (Alpine.data('graph')) return;
 
-    Alpine.data('graph', () => ({
+    Alpine.data('graph', (projectId) => ({
+        projectId: projectId,
         cy: null,
         selectedNodeIds: [],
-        layoutDirection: 'TB', // 'TB' for Top-Down, 'LR' for Left-to-Right
+        layoutDirection: 'TB',
+        nodeTypeId: "01JNODETYPE00000000TASK000", // Default: Task
 
-        init() {
+        async init() {
             this.cy = cytoscape({
                 container: this.$refs.canvas,
                 boxSelectionEnabled: false,
@@ -21,24 +23,22 @@ const registerGraph = () => {
                         style: {
                             'width': 50,
                             'height': 50,
-                            'opacity': 0, // Hide the canvas node, let HTML show
-                            'label': '' // Labels handled by HTML plugin
+                            'opacity': 0,
+                            'label': ''
                         }
                     },
                     {
                         selector: 'edge',
                         style: {
                             'width': 2,
-                            'line-color': '#C7D2FE', // Indigo-200
+                            'line-color': '#C7D2FE',
                             'target-arrow-color': '#C7D2FE',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier'
                         }
                     }
                 ],
-                elements: [
-                    { data: { id: 'root', label: 'Root' } }
-                ],
+                elements: [], // Initialized as empty, fetched via API
                 layout: {
                     name: 'dagre',
                     rankDir: this.layoutDirection,
@@ -47,7 +47,6 @@ const registerGraph = () => {
                 }
             });
 
-            // Initialize HTML labels to allow standard browser CSS
             if (this.cy.nodeHtmlLabel) {
                 this.cy.nodeHtmlLabel([
                     {
@@ -69,14 +68,11 @@ const registerGraph = () => {
                 ]);
             }
 
-            // Handle selection with 2-node limit
             this.cy.on('select', 'node', (evt) => {
                 const id = evt.target.id();
                 if (!this.selectedNodeIds.includes(id)) {
                     this.selectedNodeIds.push(id);
                 }
-
-                // Limit to 2 nodes (FIFO)
                 if (this.selectedNodeIds.length > 2) {
                     const firstId = this.selectedNodeIds.shift();
                     this.cy.$id(firstId).unselect();
@@ -95,97 +91,154 @@ const registerGraph = () => {
                 }
             });
 
-            // Initial fit
-            this.cy.ready(() => {
+            await this.fetchGraph();
+        },
+
+        async fetchGraph() {
+            try {
+                const response = await fetch(`/api/projects/${this.projectId}/graph`);
+                if (!response.ok) throw new Error('Failed to fetch graph');
+                const data = await response.json();
+
+                const elements = [
+                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title } })),
+                    ...data.edges.map(e => ({ group: 'edges', data: { source: e.parent_id, target: e.child_id } }))
+                ];
+
+                this.cy.elements().remove();
+                this.cy.add(elements);
                 this.runLayout();
-            });
+            } catch (error) {
+                console.error('Fetch error:', error);
+                alert('Could not load graph data.');
+            }
         },
 
-        addNode() {
-            const id = 'n' + (this.cy.nodes().length + 1);
-            const label = 'Node ' + (this.cy.nodes().length + 1);
+        async api(url, method, body = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (body) options.body = JSON.stringify(body);
 
-            this.cy.add({
-                group: 'nodes',
-                data: { id, label }
-            });
-
-            this.runLayout();
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || 'API request failed');
+            }
+            return response.status !== 204 ? await response.json() : null;
         },
 
-        addChildNode() {
+        async addNode() {
+            try {
+                const title = "New Node";
+
+                const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
+                    node_type_id: this.nodeTypeId,
+                    title: title,
+                    description: ""
+                });
+
+                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title } });
+                this.runLayout();
+            } catch (error) {
+                alert(`Error adding node: ${error.message}`);
+            }
+        },
+
+        async addChildNode() {
             if (this.selectedNodeIds.length === 0) return;
             const parentId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
 
-            const id = 'n' + (this.cy.nodes().length + 1);
-            const label = 'Child ' + (this.cy.nodes().length + 1);
+            try {
+                const title = "New Node";
 
-            this.cy.add([
-                { group: 'nodes', data: { id, label } },
-                { group: 'edges', data: { source: parentId, target: id } }
-            ]);
+                const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
+                    node_type_id: this.nodeTypeId,
+                    title: title,
+                    description: ""
+                });
 
-            this.runLayout();
+                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
+                    parent_id: parentId,
+                    child_id: node.id
+                });
+
+                this.cy.add([
+                    { group: 'nodes', data: { id: node.id, label: node.title } },
+                    { group: 'edges', data: { source: parentId, target: node.id } }
+                ]);
+                this.runLayout();
+            } catch (error) {
+                alert(`Error adding child node: ${error.message}`);
+            }
         },
 
-        addParentNode() {
+        async addParentNode() {
             if (this.selectedNodeIds.length === 0) return;
             const childId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
 
-            const id = 'n' + (this.cy.nodes().length + 1);
-            const label = 'Parent ' + (this.cy.nodes().length + 1);
+            try {
+                const title = "New Node";
 
-            this.cy.add([
-                { group: 'nodes', data: { id, label } },
-                { group: 'edges', data: { source: id, target: childId } }
-            ]);
+                const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
+                    node_type_id: this.nodeTypeId,
+                    title: title,
+                    description: ""
+                });
 
-            this.runLayout();
+                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
+                    parent_id: node.id,
+                    child_id: childId
+                });
+
+                this.cy.add([
+                    { group: 'nodes', data: { id: node.id, label: node.title } },
+                    { group: 'edges', data: { source: node.id, target: childId } }
+                ]);
+                this.runLayout();
+            } catch (error) {
+                alert(`Error adding parent node: ${error.message}`);
+            }
         },
 
-        connectNodes() {
+        async connectNodes() {
             if (this.selectedNodeIds.length !== 2) return;
 
             const sourceId = this.selectedNodeIds[0];
             const targetId = this.selectedNodeIds[1];
 
-            const source = this.cy.$id(sourceId);
-            const target = this.cy.$id(targetId);
+            try {
+                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
+                    parent_id: sourceId,
+                    child_id: targetId
+                });
 
-            if (target.successors().contains(source)) {
-                alert("Cannot connect: This would create a cycle!");
-                return;
+                this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
+                this.runLayout();
+            } catch (error) {
+                alert(`Error connecting nodes: ${error.message}`);
             }
-
-            if (source.edgesTo(target).length > 0) {
-                alert("Nodes are already connected.");
-                return;
-            }
-
-            this.cy.add({
-                group: 'edges',
-                data: { source: sourceId, target: targetId }
-            });
-
-            this.runLayout();
         },
 
-        disconnectNodes() {
+        async disconnectNodes() {
             if (this.selectedNodeIds.length !== 2) return;
 
-            const n1 = this.cy.$id(this.selectedNodeIds[0]);
-            const n2 = this.cy.$id(this.selectedNodeIds[1]);
+            const n1 = this.selectedNodeIds[0];
+            const n2 = this.selectedNodeIds[1];
 
-            // Find edges in both directions
-            const edges = n1.edgesWith(n2);
+            try {
+                // Try parent->child
+                await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
+                    parent_id: n1,
+                    child_id: n2
+                });
 
-            if (edges.length === 0) {
-                alert("No connection exists between these two nodes.");
-                return;
+                this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
+                this.runLayout();
+            } catch (error) {
+                alert(`Error disconnecting nodes: ${error.message}`);
             }
-
-            this.cy.remove(edges);
-            this.runLayout();
         },
 
         toggleDirection() {
@@ -193,25 +246,26 @@ const registerGraph = () => {
             this.runLayout();
         },
 
-        removeNode() {
+        async removeNode() {
             const nodes = this.cy.nodes(':selected');
-            if (nodes.length > 0) {
-                this.cy.remove(nodes);
-                this.selectedNodeIds = [];
-            } else {
-                const allNodes = this.cy.nodes();
-                if (allNodes.length > 1) {
-                    this.cy.remove(allNodes.last());
+            if (nodes.length === 0) return;
+
+            try {
+                for (const node of nodes) {
+                    await this.api(`/api/projects/${this.projectId}/nodes/${node.id()}`, 'DELETE');
+                    this.cy.remove(node);
                 }
+                this.selectedNodeIds = [];
+                this.runLayout();
+            } catch (error) {
+                alert(`Error removing node: ${error.message}`);
             }
-            this.runLayout();
         },
 
         runLayout() {
             const layout = this.cy.layout({
                 name: 'dagre',
                 rankDir: this.layoutDirection,
-                // Refinements for better stacking
                 nodeSep: 60,
                 rankSep: 100,
                 ranker: 'tight-tree',
@@ -237,4 +291,4 @@ if (window.Alpine) {
     document.addEventListener('alpine:init', registerGraph);
 }
 
-console.log('Boardtask app improved with Disconnect feature');
+console.log('Boardtask graph persistence active');
