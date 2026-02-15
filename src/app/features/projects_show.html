@@ -93,7 +93,7 @@
                                 <select x-model="editingNode.node_type_id"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
                                     <template x-for="type in nodeTypes" :key="type.id">
-                                        <option :value="type.id" x-text="type.name"></option>
+                                        <option :value="type.id" :selected="editingNode.node_type_id === type.id" x-text="type.name"></option>
                                     </template>
                                 </select>
                             </div>

@@ -110,11 +110,12 @@ const registerGraph = () => {
                 }
 
                 // Set editing node when a single node is selected or is the last selected
+                const nodeTypeId = node.data('node_type_id');
                 this.editingNode = {
                     id: id,
                     title: node.data('label'),
                     description: node.data('description') || '',
-                    node_type_id: node.data('node_type_id')
+                    node_type_id: (nodeTypeId != null && nodeTypeId !== '') ? String(nodeTypeId) : DEFAULTS.NODE_TYPE
                 };
                 this.saveSuccess = false;
 
