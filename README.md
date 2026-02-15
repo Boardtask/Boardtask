@@ -68,6 +68,7 @@ make dev
 
 The server starts at **https://boardtask.local** and automatically restarts when you edit any source file.
 
+## Building for Production
 For a single run without watching:
 
 ```bash

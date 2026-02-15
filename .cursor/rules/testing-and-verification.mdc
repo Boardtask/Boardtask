@@ -1,0 +1,39 @@
+---
+description: Procedures for testing and verifying the application in development
+alwaysApply: false
+---
+
+# Testing and Verification
+
+To quickly test the application with a verified account, follow these steps:
+
+### 1. Sign Up
+Go to [https://boardtask.local/signup](https://boardtask.local/signup) and create a test account.
+- **Example Email**: `test@example.com`
+- **Example Password**: `123`
+
+### 2. Retrieve Verification Token
+The application sends a verification email, but in development, you can grab the token directly from the SQLite database.
+Run this command in your terminal:
+```bash
+sqlite3 boardtask.db "SELECT token FROM email_verification_tokens LIMIT 1;"
+```
+
+### 3. Verify Email Manually
+Copy the token returned by the query and visit the verification URL in your browser:
+`https://boardtask.local/verify-email?token=<TOKEN>`
+
+*(Replace `<TOKEN>` with the string you copied from the database)*
+
+### 4. Verification Success
+Upon visiting the URL, your account will be marked as verified, and you will be automatically logged in and redirected to the dashboard.
+
+---
+
+### Useful Commands for Verification
+
+| Goal | Command |
+| :--- | :--- |
+| **Check user status** | `sqlite3 boardtask.db "SELECT email, is_verified FROM users;"` |
+| **Clear all users** | `sqlite3 boardtask.db "DELETE FROM users;"` |
+| **Reset database** | `make clean && make migrate` |

@@ -3442,3 +3442,39 @@ img, video { max-width: 100%; height: auto; }
   .print\:shadow-none { box-shadow: none; }
   .print\:border-0 { border-width: 0; }
 }
+
+/* ==========================================================================
+   11. CYTOSCAPE GRAPH — Custom Styles
+   ========================================================================== */
+
+.cy-node {
+  width: 50px;
+  height: 50px;
+  background-color: #4F46E5; /* Indigo-600 */
+  color: white;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cy-node--selected {
+  background-color: #4338CA; /* Indigo-700 */
+  border-color: #C7D2FE; /* Indigo-200 */
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px rgba(199, 210, 254, 0.5);
+}
+
+.cy-node__label {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+  line-height: 1.2;
+}
