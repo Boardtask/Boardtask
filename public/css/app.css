@@ -3478,3 +3478,14 @@ img, video { max-width: 100%; height: auto; }
   pointer-events: none;
   line-height: 1.2;
 }
+
+/* Side Drawer for Node Editing */
+.graph-container { height: 800px; width: 100%; position: relative; background: #fdfdfd; }
+.side-drawer { position: absolute; top: 57px; right: 0; bottom: 0; width: 320px; background: white; border-left: 1px solid #e5e7eb; box-shadow: -4px 0 15px rgba(0, 0, 0, 0.05); transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 40; display: flex; flex-direction: column; }
+.side-drawer--open { transform: translateX(0); }
+.side-drawer__header { padding: 1.25rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+.side-drawer__header h3 { margin: 0; font-size: 1.125rem; font-weight: 600; color: #111827; }
+.side-drawer__content { flex: 1; padding: 1.25rem; overflow-y: auto; }
+.side-drawer__footer { padding: 1.25rem; border-top: 1px solid #e5e7eb; background: #f9fafb; display: flex; flex-direction: column; gap: 0.75rem; }
+.side-drawer__close { color: #6b7280; cursor: pointer; }
+.side-drawer__close:hover { color: #111827; }

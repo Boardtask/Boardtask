@@ -1,5 +1,19 @@
 // Main JavaScript module for Boardtask
 
+const NODE_TYPES = {
+    TASK: "01JNODETYPE00000000TASK000",
+    BUG: "01JNODETYPE00000000BUG0000",
+    EPIC: "01JNODETYPE00000000EPIC000",
+    MILESTONE: "01JNODETYPE00000000MILESTON",
+    SPIKE: "01JNODETYPE00000000SPIKE00",
+    STORY: "01JNODETYPE00000000STORY00"
+};
+
+const DEFAULTS = {
+    NODE_TYPE: NODE_TYPES.TASK,
+    NODE_TITLE: "New Node"
+};
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -10,7 +24,10 @@ const registerGraph = () => {
         cy: null,
         selectedNodeIds: [],
         layoutDirection: 'TB',
-        nodeTypeId: "01JNODETYPE00000000TASK000", // Default: Task
+        nodeTypeId: DEFAULTS.NODE_TYPE,
+        editingNode: null, // { id: string, title: string, description: string }
+        saving: false,
+        saveSuccess: false,
 
         async init() {
             this.cy = cytoscape({
@@ -69,10 +86,21 @@ const registerGraph = () => {
             }
 
             this.cy.on('select', 'node', (evt) => {
-                const id = evt.target.id();
+                const node = evt.target;
+                const id = node.id();
+
                 if (!this.selectedNodeIds.includes(id)) {
                     this.selectedNodeIds.push(id);
                 }
+
+                // Set editing node when a single node is selected or is the last selected
+                this.editingNode = {
+                    id: id,
+                    title: node.data('label'),
+                    description: node.data('description') || ''
+                };
+                this.saveSuccess = false;
+
                 if (this.selectedNodeIds.length > 2) {
                     const firstId = this.selectedNodeIds.shift();
                     this.cy.$id(firstId).unselect();
@@ -82,12 +110,17 @@ const registerGraph = () => {
             this.cy.on('unselect', 'node', (evt) => {
                 const id = evt.target.id();
                 this.selectedNodeIds = this.selectedNodeIds.filter(nodeId => nodeId !== id);
+
+                if (this.editingNode && this.editingNode.id === id) {
+                    this.editingNode = null;
+                }
             });
 
             this.cy.on('tap', (evt) => {
                 if (evt.target === this.cy) {
                     this.cy.nodes().unselect();
                     this.selectedNodeIds = [];
+                    this.editingNode = null;
                 }
             });
 
@@ -101,7 +134,7 @@ const registerGraph = () => {
                 const data = await response.json();
 
                 const elements = [
-                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title } })),
+                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title, description: n.description } })),
                     ...data.edges.map(e => ({ group: 'edges', data: { source: e.parent_id, target: e.child_id } }))
                 ];
 
@@ -131,7 +164,7 @@ const registerGraph = () => {
 
         async addNode() {
             try {
-                const title = "New Node";
+                const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
                     node_type_id: this.nodeTypeId,
@@ -139,7 +172,7 @@ const registerGraph = () => {
                     description: ""
                 });
 
-                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title } });
+                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title, description: node.description } });
                 this.runLayout();
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
@@ -151,7 +184,7 @@ const registerGraph = () => {
             const parentId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
 
             try {
-                const title = "New Node";
+                const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
                     node_type_id: this.nodeTypeId,
@@ -165,7 +198,7 @@ const registerGraph = () => {
                 });
 
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title } },
+                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description } },
                     { group: 'edges', data: { source: parentId, target: node.id } }
                 ]);
                 this.runLayout();
@@ -179,7 +212,7 @@ const registerGraph = () => {
             const childId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
 
             try {
-                const title = "New Node";
+                const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
                     node_type_id: this.nodeTypeId,
@@ -193,7 +226,7 @@ const registerGraph = () => {
                 });
 
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title } },
+                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description } },
                     { group: 'edges', data: { source: node.id, target: childId } }
                 ]);
                 this.runLayout();
@@ -256,9 +289,38 @@ const registerGraph = () => {
                     this.cy.remove(node);
                 }
                 this.selectedNodeIds = [];
+                this.editingNode = null;
                 this.runLayout();
             } catch (error) {
                 alert(`Error removing node: ${error.message}`);
+            }
+        },
+
+        async saveNode() {
+            if (!this.editingNode || this.saving) return;
+
+            this.saving = true;
+            this.saveSuccess = false;
+
+            try {
+                await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
+                    title: this.editingNode.title,
+                    description: this.editingNode.description
+                });
+
+                // Update Cytoscape node
+                const cyNode = this.cy.$id(this.editingNode.id);
+                cyNode.data('label', this.editingNode.title);
+                cyNode.data('description', this.editingNode.description);
+
+                this.saveSuccess = true;
+                setTimeout(() => {
+                    this.saveSuccess = false;
+                }, 3000);
+            } catch (error) {
+                alert(`Error saving node: ${error.message}`);
+            } finally {
+                this.saving = false;
             }
         },
 
