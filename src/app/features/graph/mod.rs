@@ -8,5 +8,6 @@ pub mod create_edge;
 pub mod delete_edge;
 pub mod helpers;
 pub mod types;
+pub mod get_node_types;
 
 pub use defaults::sync_system_node_types;

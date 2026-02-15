@@ -6,6 +6,7 @@ use crate::app::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(crate::app::features::graph::get_graph::routes())
+        .merge(crate::app::features::graph::get_node_types::routes())
         .merge(crate::app::features::graph::create_node::routes())
         .merge(crate::app::features::graph::update_node::routes())
         .merge(crate::app::features::graph::delete_node::routes())

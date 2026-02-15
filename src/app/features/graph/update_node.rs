@@ -21,6 +21,7 @@ pub struct UpdateNodeRequest {
     pub title: Option<String>,
     #[validate(length(max = 2000))]
     pub description: Option<String>,
+    pub node_type_id: Option<String>,
 }
 
 /// Response for a created node.
@@ -63,9 +64,10 @@ pub async fn update_node(
     // Merge provided fields with existing values
     let title = request.title.as_deref().unwrap_or(&node.title);
     let description = request.description.or(node.description);
+    let node_type_id = request.node_type_id.as_deref().unwrap_or(&node.node_type_id);
 
     // Update the node
-    db::nodes::update(&state.db, &node.id, title, description.as_deref()).await?;
+    db::nodes::update(&state.db, &node.id, title, description.as_deref(), node_type_id).await?;
 
     // Fetch the updated node for response
     let updated_node = db::nodes::find_by_id(&state.db, &node.id)

@@ -79,14 +79,16 @@ pub async fn update(
     id: &str,
     title: &str,
     description: Option<&str>,
+    node_type_id: &str,
 ) -> Result<(), sqlx::Error> {
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "UPDATE nodes SET title = ?, description = ?, updated_at = ? WHERE id = ?",
+        "UPDATE nodes SET title = ?, description = ?, node_type_id = ?, updated_at = ? WHERE id = ?",
     )
     .bind(title)
     .bind(description)
+    .bind(node_type_id)
     .bind(now)
     .bind(id)
     .execute(pool)

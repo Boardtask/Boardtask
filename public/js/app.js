@@ -25,7 +25,8 @@ const registerGraph = () => {
         selectedNodeIds: [],
         layoutDirection: 'TB',
         nodeTypeId: DEFAULTS.NODE_TYPE,
-        editingNode: null, // { id: string, title: string, description: string }
+        nodeTypes: [],
+        editingNode: null, // { id: string, title: string, description: string, node_type_id: string }
         saving: false,
         saveSuccess: false,
 
@@ -97,7 +98,8 @@ const registerGraph = () => {
                 this.editingNode = {
                     id: id,
                     title: node.data('label'),
-                    description: node.data('description') || ''
+                    description: node.data('description') || '',
+                    node_type_id: node.data('node_type_id')
                 };
                 this.saveSuccess = false;
 
@@ -124,6 +126,7 @@ const registerGraph = () => {
                 }
             });
 
+            await this.fetchNodeTypes();
             await this.fetchGraph();
         },
 
@@ -134,7 +137,7 @@ const registerGraph = () => {
                 const data = await response.json();
 
                 const elements = [
-                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title, description: n.description } })),
+                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title, description: n.description, node_type_id: n.node_type_id } })),
                     ...data.edges.map(e => ({ group: 'edges', data: { source: e.parent_id, target: e.child_id } }))
                 ];
 
@@ -144,6 +147,17 @@ const registerGraph = () => {
             } catch (error) {
                 console.error('Fetch error:', error);
                 alert('Could not load graph data.');
+            }
+        },
+
+        async fetchNodeTypes() {
+            try {
+                const response = await fetch('/api/node-types');
+                if (!response.ok) throw new Error('Failed to fetch node types');
+                const data = await response.json();
+                this.nodeTypes = data.node_types;
+            } catch (error) {
+                console.error('Fetch error:', error);
             }
         },
 
@@ -172,7 +186,7 @@ const registerGraph = () => {
                     description: ""
                 });
 
-                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title, description: node.description } });
+                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } });
                 this.runLayout();
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
@@ -198,7 +212,7 @@ const registerGraph = () => {
                 });
 
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description } },
+                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } },
                     { group: 'edges', data: { source: parentId, target: node.id } }
                 ]);
                 this.runLayout();
@@ -226,7 +240,7 @@ const registerGraph = () => {
                 });
 
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description } },
+                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } },
                     { group: 'edges', data: { source: node.id, target: childId } }
                 ]);
                 this.runLayout();
@@ -305,13 +319,15 @@ const registerGraph = () => {
             try {
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
-                    description: this.editingNode.description
+                    description: this.editingNode.description,
+                    node_type_id: this.editingNode.node_type_id
                 });
 
                 // Update Cytoscape node
                 const cyNode = this.cy.$id(this.editingNode.id);
                 cyNode.data('label', this.editingNode.title);
                 cyNode.data('description', this.editingNode.description);
+                cyNode.data('node_type_id', this.editingNode.node_type_id);
 
                 this.saveSuccess = true;
                 setTimeout(() => {
