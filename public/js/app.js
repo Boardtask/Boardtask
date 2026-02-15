@@ -39,7 +39,8 @@ const registerGraph = () => {
                     {
                         selector: 'node',
                         style: {
-                            'width': 50,
+                            'shape': 'round-rectangle',
+                            'width': 150,
                             'height': 50,
                             'opacity': 0,
                             'label': ''
@@ -73,7 +74,14 @@ const registerGraph = () => {
                         valign: 'center',
                         halignBox: 'center',
                         valignBox: 'center',
-                        tpl: (data) => `<div class="cy-node"><div class="cy-node__label">${data.label}</div></div>`
+                        tpl: (data) => {
+                            const typeName = data.node_type_name || 'Task';
+                            const typeColor = data.node_type_color || '#4F46E5';
+                            return `<div class="cy-node" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                                <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
+                                <div class="cy-node__label">${data.label}</div>
+                            </div>`;
+                        }
                     },
                     {
                         query: 'node:selected',
@@ -81,7 +89,14 @@ const registerGraph = () => {
                         valign: 'center',
                         halignBox: 'center',
                         valignBox: 'center',
-                        tpl: (data) => `<div class="cy-node cy-node--selected"><div class="cy-node__label">${data.label}</div></div>`
+                        tpl: (data) => {
+                            const typeName = data.node_type_name || 'Task';
+                            const typeColor = data.node_type_color || '#4F46E5';
+                            return `<div class="cy-node cy-node--selected" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                                <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
+                                <div class="cy-node__label">${data.label}</div>
+                            </div>`;
+                        }
                     }
                 ]);
             }
@@ -137,7 +152,20 @@ const registerGraph = () => {
                 const data = await response.json();
 
                 const elements = [
-                    ...data.nodes.map(n => ({ group: 'nodes', data: { id: n.id, label: n.title, description: n.description, node_type_id: n.node_type_id } })),
+                    ...data.nodes.map(n => {
+                        const type = this.nodeTypes.find(t => t.id === n.node_type_id);
+                        return {
+                            group: 'nodes',
+                            data: {
+                                id: n.id,
+                                label: n.title,
+                                description: n.description,
+                                node_type_id: n.node_type_id,
+                                node_type_name: type ? type.name : '',
+                                node_type_color: type ? type.color : '#4F46E5'
+                            }
+                        };
+                    }),
                     ...data.edges.map(e => ({ group: 'edges', data: { source: e.parent_id, target: e.child_id } }))
                 ];
 
@@ -186,7 +214,18 @@ const registerGraph = () => {
                     description: ""
                 });
 
-                this.cy.add({ group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } });
+                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
+                this.cy.add({
+                    group: 'nodes',
+                    data: {
+                        id: node.id,
+                        label: node.title,
+                        description: node.description,
+                        node_type_id: node.node_type_id,
+                        node_type_name: type ? type.name : '',
+                        node_type_color: type ? type.color : '#4F46E5'
+                    }
+                });
                 this.runLayout();
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
@@ -211,8 +250,19 @@ const registerGraph = () => {
                     child_id: node.id
                 });
 
+                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } },
+                    {
+                        group: 'nodes',
+                        data: {
+                            id: node.id,
+                            label: node.title,
+                            description: node.description,
+                            node_type_id: node.node_type_id,
+                            node_type_name: type ? type.name : '',
+                            node_type_color: type ? type.color : '#4F46E5'
+                        }
+                    },
                     { group: 'edges', data: { source: parentId, target: node.id } }
                 ]);
                 this.runLayout();
@@ -239,8 +289,19 @@ const registerGraph = () => {
                     child_id: childId
                 });
 
+                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 this.cy.add([
-                    { group: 'nodes', data: { id: node.id, label: node.title, description: node.description, node_type_id: node.node_type_id } },
+                    {
+                        group: 'nodes',
+                        data: {
+                            id: node.id,
+                            label: node.title,
+                            description: node.description,
+                            node_type_id: node.node_type_id,
+                            node_type_name: type ? type.name : '',
+                            node_type_color: type ? type.color : '#4F46E5'
+                        }
+                    },
                     { group: 'edges', data: { source: node.id, target: childId } }
                 ]);
                 this.runLayout();
@@ -324,10 +385,13 @@ const registerGraph = () => {
                 });
 
                 // Update Cytoscape node
+                const type = this.nodeTypes.find(t => t.id === this.editingNode.node_type_id);
                 const cyNode = this.cy.$id(this.editingNode.id);
                 cyNode.data('label', this.editingNode.title);
                 cyNode.data('description', this.editingNode.description);
                 cyNode.data('node_type_id', this.editingNode.node_type_id);
+                cyNode.data('node_type_name', type ? type.name : '');
+                cyNode.data('node_type_color', type ? type.color : '#4F46E5');
 
                 this.saveSuccess = true;
                 setTimeout(() => {

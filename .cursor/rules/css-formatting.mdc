@@ -1,0 +1,36 @@
+---
+description: CSS formatting rules for Boardtask Utility CSS Framework
+globs: public/css/**/*.css
+---
+# CSS Formatting Rules
+
+To maintain the consistency and performance of the Boardtask Utility CSS Framework, follow these formatting rules:
+
+1.  **Utility Classes**: All utility classes MUST be on a single line.
+    -   **Correct**: `.p-1 { padding: 0.25rem; }`
+    -   **Incorrect**:
+        ```css
+        .p-1 {
+          padding: 0.25rem;
+        }
+        ```
+
+2.  **Collapsed Format**: For custom components, maintain the "collapsed" format where possible to reduce file size and improve scannability of the large utility file.
+
+3.  **Spacing & Indentation**:
+    -   Use **2 spaces** for indentation.
+    -   One space after the selector and before the opening brace `{`.
+    -   Rules with **4 properties or less** should be on a **single line**: `.btn { padding: 0.5rem; color: white; border: none; cursor: pointer; }`
+    -   Rules with **more than 4 properties** should be **multi-line**:
+        ```css
+        .side-drawer {
+          position: absolute;
+          top: 57px;
+          ...
+        }
+        ```
+    -   Semicolon `;` after every property.
+
+4.  **No Mass Reformatting**: Do NOT use automated tools that expand every single-property utility class into multi-lines.
+
+5.  **Minimize White Lines**: Do NOT include blank lines between rules. The file should be compact.
