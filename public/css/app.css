@@ -3215,7 +3215,7 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 }
 .cy-node__label { font-family: inherit; font-size: 13px; font-weight: 600; text-align: left; pointer-events: none; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; color: #111827; /* Gray-900 */ }
 /* Side Drawer for Node Editing */
-.graph-container { height: 800px; width: 100%; position: relative; background: #fdfdfd; }
+.graph-container { min-height: 300px; width: 100%; position: relative; background: #fdfdfd; }
 .side-drawer {
   position: absolute;
   top: 57px;
