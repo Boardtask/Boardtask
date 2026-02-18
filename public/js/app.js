@@ -442,6 +442,12 @@ const registerGraph = () => {
             }
         },
 
+        closeEditPanel() {
+            if (this.editingNode) {
+                this.cy.$id(this.editingNode.id).unselect();
+            }
+        },
+
         runLayout() {
             const layout = this.cy.layout({
                 name: 'dagre',
