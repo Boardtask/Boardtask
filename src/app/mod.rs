@@ -34,6 +34,7 @@ pub mod domain;
 pub mod db;
 pub mod single_writer;
 pub mod session;
+pub mod tenant;
 pub mod error;
 pub mod features;
 pub mod mail;

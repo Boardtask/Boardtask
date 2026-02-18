@@ -35,8 +35,8 @@ pub async fn create_edge(
     Path(project_id): Path<String>,
     Json(request): Json<CreateEdgeRequest>,
 ) -> Result<(StatusCode, Json<EdgeResponse>), AppError> {
-    // Ensure user owns the project
-    let _project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
+    // Validate org membership on every write
+    let _project = super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
 
     // Validate both nodes exist and belong to the project
     let parent_node = db::nodes::find_by_id(&state.db, &request.parent_id)

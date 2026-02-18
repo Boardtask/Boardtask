@@ -75,7 +75,8 @@ pub async fn create_node(
     Path(project_id): Path<String>,
     Json(request): Json<CreateNodeRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), AppError> {
-    let project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
+    // Validate org membership on every write
+    let project = super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
 
     let (node_type_id, status_id) = validate_create_node_request(&request, &state.db).await?;
 

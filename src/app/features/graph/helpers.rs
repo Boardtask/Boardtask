@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use validator::ValidationError;
 
-use crate::app::{db, error::AppError};
+use crate::app::{db, error::AppError, tenant};
 
 /// Default task status ID (system "To do"). Must match migration INSERT.
 pub const DEFAULT_STATUS_ID: &str = "01JSTATUS00000000TODO0000";
@@ -19,21 +19,20 @@ pub fn validate_estimated_minutes(value: i64) -> Result<(), ValidationError> {
     Ok(())
 }
 
-/// Ensure a user owns a project. Returns NotFound if missing or not owned.
-pub async fn ensure_project_owned(
+/// Ensure user is a member of the project's org and has access. Validates membership from DB;
+/// never trusts session org. Returns the project on success.
+pub async fn ensure_project_accessible(
     pool: &sqlx::SqlitePool,
     project_id: &str,
     user_id: &str,
-    organization_id: &str,
 ) -> Result<db::projects::Project, AppError> {
     let project = db::projects::find_by_id(pool, project_id)
         .await
         .map_err(AppError::Database)?
         .ok_or_else(|| AppError::NotFound("Project not found".to_string()))?;
 
-    if project.user_id != user_id || project.organization_id != organization_id {
-        return Err(AppError::NotFound("Project not found".to_string()));
-    }
+    // Validate membership from DB - never trust session org
+    let _role = tenant::require_org_member(pool, user_id, &project.organization_id).await?;
 
     Ok(project)
 }
