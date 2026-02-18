@@ -86,7 +86,8 @@ async fn post_node_succeeds() {
     let request_body = serde_json::json!({
         "node_type_id": TASK_NODE_TYPE_ID,
         "title": "Test Node",
-        "description": "A test node"
+        "description": "A test node",
+        "estimated_minutes": 30
     });
 
     let request = http::Request::builder()
@@ -107,6 +108,7 @@ async fn post_node_succeeds() {
     assert_eq!(body["node_type_id"], TASK_NODE_TYPE_ID);
     assert_eq!(body["title"], "Test Node");
     assert_eq!(body["description"], "A test node");
+    assert_eq!(body["estimated_minutes"], 30);
     assert!(body["id"].is_string());
     assert!(body["created_at"].is_number());
 }
@@ -289,6 +291,7 @@ async fn post_edge_succeeds() {
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
         title: "Parent Node".to_string(),
         description: None,
+        estimated_minutes: None,
     };
     let child_node = db::nodes::NewNode {
         id: child_node_id.clone(),
@@ -296,6 +299,7 @@ async fn post_edge_succeeds() {
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
         title: "Child Node".to_string(),
         description: None,
+        estimated_minutes: None,
     };
 
     boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
@@ -354,6 +358,7 @@ async fn post_edge_404_when_node_not_in_project() {
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
         title: "Project Node".to_string(),
         description: None,
+        estimated_minutes: None,
     };
     boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
 
@@ -374,6 +379,7 @@ async fn post_edge_404_when_node_not_in_project() {
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
         title: "Other Node".to_string(),
         description: None,
+        estimated_minutes: None,
     };
     boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
 
@@ -451,7 +457,8 @@ mod get_graph {
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
             title: "Node 1".to_string(),
             description: Some("First node".to_string()),
-            };
+            estimated_minutes: None,
+        };
         boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
 
         let node2_id = ulid::Ulid::new().to_string();
@@ -461,7 +468,8 @@ mod get_graph {
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
             title: "Node 2".to_string(),
             description: None,
-            };
+            estimated_minutes: None,
+        };
         boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();
 
         // Create an edge

@@ -23,6 +23,8 @@ pub struct CreateNodeRequest {
     pub title: String,
     #[validate(length(max = 2000))]
     pub description: Option<String>,
+    #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
+    pub estimated_minutes: Option<i64>,
 }
 
 /// Response for a created node.
@@ -35,6 +37,7 @@ pub struct NodeResponse {
     pub description: Option<String>,
     pub created_at: i64,
     pub updated_at: Option<i64>,
+    pub estimated_minutes: Option<i64>,
 }
 
 /// POST /api/projects/:project_id/nodes — Create a new node.
@@ -67,6 +70,7 @@ pub async fn create_node(
         node_type_id: request.node_type_id,
         title: request.title,
         description: request.description,
+        estimated_minutes: request.estimated_minutes,
     };
 
     db::nodes::insert(&state.db, &new_node).await?;
@@ -84,6 +88,7 @@ pub async fn create_node(
         description: node.description,
         created_at: node.created_at,
         updated_at: node.updated_at,
+        estimated_minutes: node.estimated_minutes,
     };
 
     Ok((StatusCode::CREATED, Json(response)))

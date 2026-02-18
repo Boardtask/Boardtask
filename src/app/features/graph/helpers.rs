@@ -1,4 +1,20 @@
+use std::borrow::Cow;
+
+use validator::ValidationError;
+
 use crate::app::{db, error::AppError};
+
+/// Max estimated minutes (avoids 10^18, malicious input, keeps aggregation safe).
+pub const MAX_ESTIMATED_MINUTES: i64 = 1_000_000_000;
+
+/// Validates estimated_minutes for use with the validator crate (create/update node requests).
+pub fn validate_estimated_minutes(value: i64) -> Result<(), ValidationError> {
+    if value < 0 || value > MAX_ESTIMATED_MINUTES {
+        return Err(ValidationError::new("estimated_minutes")
+            .with_message(Cow::Borrowed("must be between 0 and 1_000_000_000")));
+    }
+    Ok(())
+}
 
 /// Ensure a user owns a project. Returns NotFound if missing or not owned.
 pub async fn ensure_project_owned(

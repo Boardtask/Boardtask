@@ -22,9 +22,12 @@ pub struct UpdateNodeRequest {
     #[validate(length(max = 2000))]
     pub description: Option<String>,
     pub node_type_id: Option<String>,
+    /// Omit = unchanged, null = clear estimate.
+    #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
+    pub estimated_minutes: Option<Option<i64>>,
 }
 
-/// Response for a created node.
+/// Response for an updated node.
 #[derive(Debug, Serialize)]
 pub struct NodeResponse {
     pub id: String,
@@ -34,6 +37,7 @@ pub struct NodeResponse {
     pub description: Option<String>,
     pub created_at: i64,
     pub updated_at: Option<i64>,
+    pub estimated_minutes: Option<i64>,
 }
 
 /// PATCH /api/projects/:project_id/nodes/:id — Update a node.
@@ -65,9 +69,18 @@ pub async fn update_node(
     let title = request.title.as_deref().unwrap_or(&node.title);
     let description = request.description.or(node.description);
     let node_type_id = request.node_type_id.as_deref().unwrap_or(&node.node_type_id);
+    let estimated_minutes = request.estimated_minutes.unwrap_or(node.estimated_minutes);
 
     // Update the node
-    db::nodes::update(&state.db, &node.id, title, description.as_deref(), node_type_id).await?;
+    db::nodes::update(
+        &state.db,
+        &node.id,
+        title,
+        description.as_deref(),
+        node_type_id,
+        estimated_minutes,
+    )
+    .await?;
 
     // Fetch the updated node for response
     let updated_node = db::nodes::find_by_id(&state.db, &node.id)
@@ -82,6 +95,7 @@ pub async fn update_node(
         description: updated_node.description,
         created_at: updated_node.created_at,
         updated_at: updated_node.updated_at,
+        estimated_minutes: updated_node.estimated_minutes,
     };
 
     Ok((StatusCode::OK, Json(response)))

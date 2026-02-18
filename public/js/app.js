@@ -14,6 +14,18 @@ const DEFAULTS = {
     NODE_TITLE: "New Node"
 };
 
+function minutesToAmountAndUnit(minutes) {
+    if (minutes == null || minutes <= 0) return { amount: '', unit: 'minutes' };
+    if (minutes >= 60 && minutes % 60 === 0) return { amount: minutes / 60, unit: 'hours' };
+    return { amount: minutes, unit: 'minutes' };
+}
+
+function formatEstimatedMinutes(minutes) {
+    const { amount, unit } = minutesToAmountAndUnit(minutes);
+    if (amount === '') return '';
+    return unit === 'hours' ? `${amount}h` : `${amount}m`;
+}
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -77,9 +89,12 @@ const registerGraph = () => {
                         tpl: (data) => {
                             const typeName = data.node_type_name || 'Task';
                             const typeColor = data.node_type_color || '#4F46E5';
+                            const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
+                            const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             return `<div class="cy-node" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
+                                ${estimateHtml}
                             </div>`;
                         }
                     },
@@ -92,9 +107,12 @@ const registerGraph = () => {
                         tpl: (data) => {
                             const typeName = data.node_type_name || 'Task';
                             const typeColor = data.node_type_color || '#4F46E5';
+                            const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
+                            const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             return `<div class="cy-node cy-node--selected" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
+                                ${estimateHtml}
                             </div>`;
                         }
                     }
@@ -111,11 +129,14 @@ const registerGraph = () => {
 
                 // Set editing node when a single node is selected or is the last selected
                 const nodeTypeId = node.data('node_type_id');
+                const { amount: estimatedAmount, unit: estimatedUnit } = minutesToAmountAndUnit(node.data('estimated_minutes'));
                 this.editingNode = {
                     id: id,
                     title: node.data('label'),
                     description: node.data('description') || '',
-                    node_type_id: (nodeTypeId != null && nodeTypeId !== '') ? String(nodeTypeId) : DEFAULTS.NODE_TYPE
+                    node_type_id: (nodeTypeId != null && nodeTypeId !== '') ? String(nodeTypeId) : DEFAULTS.NODE_TYPE,
+                    estimated_amount: estimatedAmount,
+                    estimated_unit: estimatedUnit
                 };
                 this.saveSuccess = false;
 
@@ -163,7 +184,8 @@ const registerGraph = () => {
                                 description: n.description,
                                 node_type_id: n.node_type_id,
                                 node_type_name: type ? type.name : '',
-                                node_type_color: type ? type.color : '#4F46E5'
+                                node_type_color: type ? type.color : '#4F46E5',
+                                estimated_minutes: n.estimated_minutes ?? null
                             }
                         };
                     }),
@@ -224,7 +246,8 @@ const registerGraph = () => {
                         description: node.description,
                         node_type_id: node.node_type_id,
                         node_type_name: type ? type.name : '',
-                        node_type_color: type ? type.color : '#4F46E5'
+                        node_type_color: type ? type.color : '#4F46E5',
+                        estimated_minutes: node.estimated_minutes ?? null
                     }
                 });
                 this.runLayout();
@@ -261,7 +284,8 @@ const registerGraph = () => {
                             description: node.description,
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
-                            node_type_color: type ? type.color : '#4F46E5'
+                            node_type_color: type ? type.color : '#4F46E5',
+                            estimated_minutes: node.estimated_minutes ?? null
                         }
                     },
                     { group: 'edges', data: { source: parentId, target: node.id } }
@@ -300,7 +324,8 @@ const registerGraph = () => {
                             description: node.description,
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
-                            node_type_color: type ? type.color : '#4F46E5'
+                            node_type_color: type ? type.color : '#4F46E5',
+                            estimated_minutes: node.estimated_minutes ?? null
                         }
                     },
                     { group: 'edges', data: { source: node.id, target: childId } }
@@ -378,11 +403,20 @@ const registerGraph = () => {
             this.saving = true;
             this.saveSuccess = false;
 
+            const amount = this.editingNode.estimated_amount;
+            const unit = this.editingNode.estimated_unit || 'minutes';
+            let estimatedMinutes = null;
+            if (amount !== '' && amount != null && !Number.isNaN(Number(amount))) {
+                const n = Number(amount);
+                estimatedMinutes = unit === 'hours' ? Math.round(n * 60) : Math.round(n);
+            }
+
             try {
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
                     description: this.editingNode.description,
-                    node_type_id: this.editingNode.node_type_id
+                    node_type_id: this.editingNode.node_type_id,
+                    estimated_minutes: estimatedMinutes
                 });
 
                 // Update Cytoscape node
@@ -393,6 +427,7 @@ const registerGraph = () => {
                 cyNode.data('node_type_id', this.editingNode.node_type_id);
                 cyNode.data('node_type_name', type ? type.name : '');
                 cyNode.data('node_type_color', type ? type.color : '#4F46E5');
+                cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.saveSuccess = true;
                 setTimeout(() => {
