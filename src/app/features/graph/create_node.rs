@@ -23,6 +23,7 @@ pub struct CreateNodeRequest {
     pub title: String,
     #[validate(length(max = 2000))]
     pub description: Option<String>,
+    pub status_id: Option<String>,
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
     pub estimated_minutes: Option<i64>,
 }
@@ -33,11 +34,38 @@ pub struct NodeResponse {
     pub id: String,
     pub project_id: String,
     pub node_type_id: String,
+    pub status_id: String,
     pub title: String,
     pub description: Option<String>,
     pub created_at: i64,
     pub updated_at: Option<i64>,
     pub estimated_minutes: Option<i64>,
+}
+
+/// Validates create-node request (sync rules + DB-backed node_type_id and status_id). Returns (node_type_id, status_id).
+async fn validate_create_node_request(
+    request: &CreateNodeRequest,
+    pool: &sqlx::SqlitePool,
+) -> Result<(String, String), AppError> {
+    request
+        .validate()
+        .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
+
+    let _ = db::node_types::find_by_id(pool, &request.node_type_id)
+        .await?
+        .ok_or_else(|| AppError::Validation("Invalid node_type_id".to_string()))?;
+
+    let status_id = match &request.status_id {
+        None => super::helpers::DEFAULT_STATUS_ID.to_string(),
+        Some(s) => {
+            let _ = db::task_statuses::find_by_id(pool, s)
+                .await?
+                .ok_or_else(|| AppError::Validation("Invalid status_id".to_string()))?;
+            s.clone()
+        }
+    };
+
+    Ok((request.node_type_id.clone(), status_id))
 }
 
 /// POST /api/projects/:project_id/nodes — Create a new node.
@@ -47,18 +75,9 @@ pub async fn create_node(
     Path(project_id): Path<String>,
     Json(request): Json<CreateNodeRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), AppError> {
-    // Validate request first (title 1-255, description max 2000) — no DB calls
-    request
-        .validate()
-        .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
-
-    // Ensure user owns the project
     let project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
 
-    // Validate node_type_id exists
-    let _node_type = db::node_types::find_by_id(&state.db, &request.node_type_id)
-        .await?
-        .ok_or_else(|| AppError::Validation("Invalid node_type_id".to_string()))?;
+    let (node_type_id, status_id) = validate_create_node_request(&request, &state.db).await?;
 
     // Generate ULID for node
     let node_id = Ulid::new().to_string();
@@ -67,7 +86,8 @@ pub async fn create_node(
     let new_node = db::nodes::NewNode {
         id: node_id.clone(),
         project_id: project.id.clone(),
-        node_type_id: request.node_type_id,
+        node_type_id,
+        status_id,
         title: request.title,
         description: request.description,
         estimated_minutes: request.estimated_minutes,
@@ -84,6 +104,7 @@ pub async fn create_node(
         id: node.id,
         project_id: node.project_id,
         node_type_id: node.node_type_id,
+        status_id: node.status_id,
         title: node.title,
         description: node.description,
         created_at: node.created_at,

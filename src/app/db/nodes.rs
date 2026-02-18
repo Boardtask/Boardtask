@@ -7,6 +7,7 @@ pub struct Node {
     pub id: String,
     pub project_id: String,
     pub node_type_id: String,
+    pub status_id: String,
     pub title: String,
     pub description: Option<String>,
     pub created_at: i64,
@@ -19,6 +20,7 @@ pub struct NewNode {
     pub id: String,
     pub project_id: String,
     pub node_type_id: String,
+    pub status_id: String,
     pub title: String,
     pub description: Option<String>,
     pub estimated_minutes: Option<i64>,
@@ -35,11 +37,12 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO nodes (id, project_id, node_type_id, title, description, created_at, estimated_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO nodes (id, project_id, node_type_id, status_id, title, description, created_at, estimated_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&node.id)
     .bind(&node.project_id)
     .bind(&node.node_type_id)
+    .bind(&node.status_id)
     .bind(&node.title)
     .bind(&node.description)
     .bind(now)
@@ -56,7 +59,7 @@ pub async fn find_by_project(
     project_id: &str,
 ) -> Result<Vec<Node>, sqlx::Error> {
     sqlx::query_as::<_, Node>(
-        "SELECT id, project_id, node_type_id, title, description, created_at, updated_at, estimated_minutes FROM nodes WHERE project_id = ? ORDER BY created_at",
+        "SELECT id, project_id, node_type_id, status_id, title, description, created_at, updated_at, estimated_minutes FROM nodes WHERE project_id = ? ORDER BY created_at",
     )
     .bind(project_id)
     .fetch_all(pool)
@@ -69,30 +72,32 @@ pub async fn find_by_id(
     id: &str,
 ) -> Result<Option<Node>, sqlx::Error> {
     sqlx::query_as::<_, Node>(
-        "SELECT id, project_id, node_type_id, title, description, created_at, updated_at, estimated_minutes FROM nodes WHERE id = ?",
+        "SELECT id, project_id, node_type_id, status_id, title, description, created_at, updated_at, estimated_minutes FROM nodes WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
     .await
 }
 
-/// Update a node's title, description, node_type_id, estimated_minutes, and updated_at timestamp.
+/// Update a node's title, description, node_type_id, status_id, estimated_minutes, and updated_at timestamp.
 pub async fn update(
     pool: &sqlx::SqlitePool,
     id: &str,
     title: &str,
     description: Option<&str>,
     node_type_id: &str,
+    status_id: &str,
     estimated_minutes: Option<i64>,
 ) -> Result<(), sqlx::Error> {
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "UPDATE nodes SET title = ?, description = ?, node_type_id = ?, estimated_minutes = ?, updated_at = ? WHERE id = ?",
+        "UPDATE nodes SET title = ?, description = ?, node_type_id = ?, status_id = ?, estimated_minutes = ?, updated_at = ? WHERE id = ?",
     )
     .bind(title)
     .bind(description)
     .bind(node_type_id)
+    .bind(status_id)
     .bind(estimated_minutes)
     .bind(now)
     .bind(id)

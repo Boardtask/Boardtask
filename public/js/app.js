@@ -11,7 +11,8 @@ const NODE_TYPES = {
 
 const DEFAULTS = {
     NODE_TYPE: NODE_TYPES.TASK,
-    NODE_TITLE: "New Node"
+    NODE_TITLE: "New Node",
+    STATUS_ID: "01JSTATUS00000000TODO0000"
 };
 
 function minutesToAmountAndUnit(minutes) {
@@ -38,7 +39,8 @@ const registerGraph = () => {
         layoutDirection: 'TB',
         nodeTypeId: DEFAULTS.NODE_TYPE,
         nodeTypes: [],
-        editingNode: null, // { id: string, title: string, description: string, node_type_id: string }
+        taskStatuses: [],
+        editingNode: null, // { id, title, description, node_type_id, status_id, estimated_amount, estimated_unit }
         saving: false,
         saveSuccess: false,
 
@@ -89,12 +91,15 @@ const registerGraph = () => {
                         tpl: (data) => {
                             const typeName = data.node_type_name || 'Task';
                             const typeColor = data.node_type_color || '#4F46E5';
+                            const statusName = data.status_name || '';
+                            const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            const compactClass = !estimateStr ? ' cy-node--compact' : '';
+                            const compactClass = (!estimateStr && !statusName) ? ' cy-node--compact' : '';
                             return `<div class="cy-node${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
+                                ${statusHtml}
                                 ${estimateHtml}
                             </div>`;
                         }
@@ -108,12 +113,15 @@ const registerGraph = () => {
                         tpl: (data) => {
                             const typeName = data.node_type_name || 'Task';
                             const typeColor = data.node_type_color || '#4F46E5';
+                            const statusName = data.status_name || '';
+                            const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            const compactClass = !estimateStr ? ' cy-node--compact' : '';
+                            const compactClass = (!estimateStr && !statusName) ? ' cy-node--compact' : '';
                             return `<div class="cy-node cy-node--selected${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
+                                ${statusHtml}
                                 ${estimateHtml}
                             </div>`;
                         }
@@ -131,12 +139,14 @@ const registerGraph = () => {
 
                 // Set editing node when a single node is selected or is the last selected
                 const nodeTypeId = node.data('node_type_id');
+                const statusId = node.data('status_id');
                 const { amount: estimatedAmount, unit: estimatedUnit } = minutesToAmountAndUnit(node.data('estimated_minutes'));
                 this.editingNode = {
                     id: id,
                     title: node.data('label'),
                     description: node.data('description') || '',
                     node_type_id: (nodeTypeId != null && nodeTypeId !== '') ? String(nodeTypeId) : DEFAULTS.NODE_TYPE,
+                    status_id: (statusId != null && statusId !== '') ? String(statusId) : DEFAULTS.STATUS_ID,
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
@@ -165,7 +175,7 @@ const registerGraph = () => {
                 }
             });
 
-            await this.fetchNodeTypes();
+            await Promise.all([this.fetchNodeTypes(), this.fetchTaskStatuses()]);
             await this.fetchGraph();
         },
 
@@ -178,6 +188,7 @@ const registerGraph = () => {
                 const elements = [
                     ...data.nodes.map(n => {
                         const type = this.nodeTypes.find(t => t.id === n.node_type_id);
+                        const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         return {
                             group: 'nodes',
                             data: {
@@ -187,6 +198,8 @@ const registerGraph = () => {
                                 node_type_id: n.node_type_id,
                                 node_type_name: type ? type.name : '',
                                 node_type_color: type ? type.color : '#4F46E5',
+                                status_id: n.status_id ?? DEFAULTS.STATUS_ID,
+                                status_name: status ? status.name : 'To do',
                                 estimated_minutes: n.estimated_minutes ?? null
                             }
                         };
@@ -209,6 +222,17 @@ const registerGraph = () => {
                 if (!response.ok) throw new Error('Failed to fetch node types');
                 const data = await response.json();
                 this.nodeTypes = data.node_types;
+            } catch (error) {
+                console.error('Fetch error:', error);
+            }
+        },
+
+        async fetchTaskStatuses() {
+            try {
+                const response = await fetch('/api/task-statuses');
+                if (!response.ok) throw new Error('Failed to fetch task statuses');
+                const data = await response.json();
+                this.taskStatuses = data.task_statuses;
             } catch (error) {
                 console.error('Fetch error:', error);
             }
@@ -240,6 +264,7 @@ const registerGraph = () => {
                 });
 
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
+                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 this.cy.add({
                     group: 'nodes',
                     data: {
@@ -248,6 +273,8 @@ const registerGraph = () => {
                         description: node.description,
                         node_type_id: node.node_type_id,
                         node_type_name: type ? type.name : '',
+                        status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                        status_name: status ? status.name : 'To do',
                         node_type_color: type ? type.color : '#4F46E5',
                         estimated_minutes: node.estimated_minutes ?? null
                     }
@@ -277,6 +304,7 @@ const registerGraph = () => {
                 });
 
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
+                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 this.cy.add([
                     {
                         group: 'nodes',
@@ -287,6 +315,8 @@ const registerGraph = () => {
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
                             node_type_color: type ? type.color : '#4F46E5',
+                            status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                            status_name: status ? status.name : 'To do',
                             estimated_minutes: node.estimated_minutes ?? null
                         }
                     },
@@ -317,6 +347,7 @@ const registerGraph = () => {
                 });
 
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
+                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 this.cy.add([
                     {
                         group: 'nodes',
@@ -327,6 +358,8 @@ const registerGraph = () => {
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
                             node_type_color: type ? type.color : '#4F46E5',
+                            status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                            status_name: status ? status.name : 'To do',
                             estimated_minutes: node.estimated_minutes ?? null
                         }
                     },
@@ -418,17 +451,21 @@ const registerGraph = () => {
                     title: this.editingNode.title,
                     description: this.editingNode.description,
                     node_type_id: this.editingNode.node_type_id,
+                    status_id: this.editingNode.status_id,
                     estimated_minutes: estimatedMinutes
                 });
 
                 // Update Cytoscape node
                 const type = this.nodeTypes.find(t => t.id === this.editingNode.node_type_id);
+                const status = this.taskStatuses.find(s => s.id === this.editingNode.status_id);
                 const cyNode = this.cy.$id(this.editingNode.id);
                 cyNode.data('label', this.editingNode.title);
                 cyNode.data('description', this.editingNode.description);
                 cyNode.data('node_type_id', this.editingNode.node_type_id);
                 cyNode.data('node_type_name', type ? type.name : '');
                 cyNode.data('node_type_color', type ? type.color : '#4F46E5');
+                cyNode.data('status_id', this.editingNode.status_id);
+                cyNode.data('status_name', status ? status.name : 'To do');
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.saveSuccess = true;

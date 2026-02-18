@@ -7,8 +7,10 @@ pub mod organizations;
 pub mod node_types;
 pub mod nodes;
 pub mod node_edges;
+pub mod task_statuses;
 
 pub use users::{find_by_email, User, NewUser, mark_verified, update_password};
 pub use sessions::{create, find_valid, delete, Session};
 pub use node_types::{get_all_systems, NodeType, NewNodeType};
+pub use task_statuses::TaskStatus;
 pub use projects::*;

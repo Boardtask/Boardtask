@@ -7,6 +7,9 @@ use crate::common::*;
 use boardtask::app::db;
 
 const TASK_NODE_TYPE_ID: &str = "01JNODETYPE00000000TASK000";
+const DEFAULT_STATUS_ID: &str = "01JSTATUS00000000TODO0000";
+const STATUS_ID_IN_PROGRESS: &str = "01JSTATUS00000000INPROG00";
+const STATUS_ID_DONE: &str = "01JSTATUS00000000DONE0000";
 
 mod nodes {
     use super::*;
@@ -229,6 +232,126 @@ async fn post_node_invalid_node_type_returns_error() {
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["error"], "Invalid node_type_id");
+}
+
+#[tokio::test]
+async fn post_node_invalid_status_id_returns_error() {
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, "invalidstatus@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "status_id": "invalid-status-id"
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid status_id");
+}
+
+#[tokio::test]
+async fn post_node_with_status_then_patch_and_get_graph() {
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, "statusflow@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Status Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+    // Create node with explicit "In progress" status
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Status Test Node",
+        "status_id": STATUS_ID_IN_PROGRESS
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::CREATED);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    let node_id = body["id"].as_str().unwrap();
+    assert_eq!(body["status_id"], STATUS_ID_IN_PROGRESS);
+
+    // PATCH to "Done"
+    let patch_body = serde_json::json!({ "status_id": STATUS_ID_DONE });
+    let patch_request = http::Request::builder()
+        .method("PATCH")
+        .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(patch_body.to_string()))
+        .unwrap();
+
+    let patch_response = app.clone().oneshot(patch_request).await.unwrap();
+    assert_eq!(patch_response.status(), http::StatusCode::OK);
+
+    let patch_res_bytes = patch_response.into_body().collect().await.unwrap().to_bytes();
+    let patch_res: serde_json::Value = serde_json::from_slice(&patch_res_bytes).unwrap();
+    assert_eq!(patch_res["status_id"], STATUS_ID_DONE);
+
+    // GET graph and assert node has status_id Done
+    let get_request = http::Request::builder()
+        .method("GET")
+        .uri(&format!("/api/projects/{}/graph", project_id))
+        .header("cookie", &cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let get_response = app.clone().oneshot(get_request).await.unwrap();
+    assert_eq!(get_response.status(), http::StatusCode::OK);
+
+    let get_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+    let graph: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
+    let nodes = graph["nodes"].as_array().unwrap();
+    let node = nodes.iter().find(|n| n["id"] == node_id).unwrap();
+    assert_eq!(node["status_id"], STATUS_ID_DONE);
     }
 }
 
@@ -267,6 +390,7 @@ mod patch_node {
             id: node_id.clone(),
             project_id: project_id.clone(),
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
             title: "Node With Estimate".to_string(),
             description: None,
             estimated_minutes: Some(30),
@@ -372,6 +496,7 @@ async fn post_edge_succeeds() {
         id: parent_node_id.clone(),
         project_id: project_id.clone(),
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
         title: "Parent Node".to_string(),
         description: None,
         estimated_minutes: None,
@@ -380,6 +505,7 @@ async fn post_edge_succeeds() {
         id: child_node_id.clone(),
         project_id: project_id.clone(),
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
         title: "Child Node".to_string(),
         description: None,
         estimated_minutes: None,
@@ -439,6 +565,7 @@ async fn post_edge_404_when_node_not_in_project() {
         id: project_node_id.clone(),
         project_id: project_id.clone(),
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
         title: "Project Node".to_string(),
         description: None,
         estimated_minutes: None,
@@ -460,6 +587,7 @@ async fn post_edge_404_when_node_not_in_project() {
         id: other_node_id.clone(),
         project_id: other_project_id.clone(),
         node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
         title: "Other Node".to_string(),
         description: None,
         estimated_minutes: None,
@@ -538,6 +666,7 @@ mod get_graph {
             id: node1_id.clone(),
             project_id: project_id.clone(),
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
             title: "Node 1".to_string(),
             description: Some("First node".to_string()),
             estimated_minutes: None,
@@ -549,6 +678,7 @@ mod get_graph {
             id: node2_id.clone(),
             project_id: project_id.clone(),
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
             title: "Node 2".to_string(),
             description: None,
             estimated_minutes: None,

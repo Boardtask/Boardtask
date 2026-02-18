@@ -4,6 +4,9 @@ use validator::ValidationError;
 
 use crate::app::{db, error::AppError};
 
+/// Default task status ID (system "To do"). Must match migration INSERT.
+pub const DEFAULT_STATUS_ID: &str = "01JSTATUS00000000TODO0000";
+
 /// Max estimated minutes (avoids 10^18, malicious input, keeps aggregation safe).
 pub const MAX_ESTIMATED_MINUTES: i64 = 1_000_000_000;
 

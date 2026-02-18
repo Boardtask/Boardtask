@@ -105,6 +105,16 @@
                                     placeholder="Add a description..."></textarea>
                             </div>
 
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <select x-model="editingNode.status_id"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    <template x-for="status in taskStatuses" :key="status.id">
+                                        <option :value="status.id" :selected="editingNode.status_id === status.id" x-text="status.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+
                             <div class="min-w-0">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Estimated time</label>
                                 <div class="flex gap-2 min-w-0">
