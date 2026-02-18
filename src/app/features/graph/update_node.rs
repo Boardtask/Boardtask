@@ -49,7 +49,7 @@ pub async fn update_node(
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
     // Ensure user owns the project
-    let _project = super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id).await?;
+    let _project = super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id, &session.organization_id).await?;
 
     // Load the existing node
     let node = db::nodes::find_by_id(&state.db, &params.id)

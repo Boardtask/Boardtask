@@ -87,6 +87,16 @@ The optimised binary is at `target/release/boardtask`. Run it with:
 DATABASE_URL=sqlite:boardtask.db ./target/release/boardtask
 ```
 
+### Production: avoiding SQLite corruption
+
+The app is built to reduce the risk of database corruption in production:
+
+- **Graceful shutdown** — On SIGTERM/SIGINT the server stops accepting new requests, finishes in-flight ones, then closes the SQLite connection pool so the DB and WAL are left in a consistent state. Always stop the process with `kill <pid>` or Ctrl+C (not `kill -9`) when possible.
+- **Durability** — `PRAGMA synchronous=NORMAL` with WAL gives a good balance of safety and performance; use FULL only if you need strict durability (e.g. finance).
+- **Single writer** — The app enforces one process per database file. If another instance (or the seed binary) is already using the same file, the new process exits at startup with a clear error. Do not point multiple processes at the same `boardtask.db`.
+- **Local disk** — Store the database on local SSD. Avoid NFS, network filesystems, or shared volumes that can cause I/O errors or lock issues.
+- **Backups** — Take regular backups (e.g. `sqlite3 boardtask.db ".backup backup.db"` or copy the file while the app is stopped). If the DB is ever corrupted, restore from backup and run migrations if needed; do not delete WAL/shm on a live process.
+
 ## Project Structure
 
 ```
@@ -139,6 +149,8 @@ This project uses vertical slice architecture with colocated Askama templates. F
 | `make run`     | Run Axum                             |
 | `make build`   | Build release binary                       |
 | `make migrate` | Create DB + run migrations                 |
+| `make db-reset-wal` | Clear WAL/shm only (fixes I/O 522; stop app first) |
+| `make db-reset` | Remove DB file so next run recreates it (data lost; stop app first) |
 | `make clean`   | Remove build artifacts and local database |
 
 ## How It Works
@@ -167,3 +179,5 @@ Static files (CSS, MJS) are served by Caddy directly from `public/`, never hitti
 **"boardtask.local not found"** — Run `make hosts` to add it to `/etc/hosts`.
 
 **Caddy SSL errors** — On first run, Caddy may need your password to install its root CA. Enter it when prompted.
+
+**SQLite "disk I/O error" (522) or "database disk image is malformed" (11)** — Stop the app, then run `make db-reset-wal`. If the DB is corrupted, run `make db-reset` (this deletes the database; next start will recreate it via migrations). See "Production: avoiding SQLite corruption" above for prevention.

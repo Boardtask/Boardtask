@@ -12,6 +12,15 @@ async fn main() {
     let config = app::config::Config::from_env()
         .expect("Failed to load config (check DATABASE_URL and other env vars)");
 
+    let _db_lock = match app::single_writer::acquire(&config.database_url) {
+        Ok(Some(guard)) => Some(guard),
+        Ok(None) => None,
+        Err(msg) => {
+            eprintln!("{}", msg);
+            std::process::exit(1);
+        }
+    };
+
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
         .acquire_timeout(Duration::from_secs(3))

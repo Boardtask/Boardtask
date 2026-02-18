@@ -137,17 +137,21 @@ async fn list_projects_shows_user_projects() {
     let app = common::test_router(pool.clone());
     let cookie = authenticated_cookie(&pool, &app, "list@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     use boardtask::app::db::projects;
     let project1 = projects::NewProject {
         id: ulid::Ulid::new().to_string(),
         title: "Project Alpha".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     let project2 = projects::NewProject {
         id: ulid::Ulid::new().to_string(),
         title: "Project Beta".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     projects::insert(&pool, &project1).await.unwrap();
     projects::insert(&pool, &project2).await.unwrap();
@@ -196,6 +200,8 @@ async fn show_project_renders() {
     let app = common::test_router(pool.clone());
     let cookie = authenticated_cookie(&pool, &app, "show@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     let project_id = ulid::Ulid::new().to_string();
     let project_title = "My Awesome Project";
@@ -204,6 +210,7 @@ async fn show_project_renders() {
         id: project_id.clone(),
         title: project_title.to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     projects::insert(&pool, &new_project).await.unwrap();
 

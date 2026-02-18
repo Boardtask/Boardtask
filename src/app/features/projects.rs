@@ -9,7 +9,11 @@ use axum::{
 use serde::Deserialize;
 use validator::Validate;
 
-use crate::app::{db, session::AuthenticatedSession, AppState, APP_NAME};
+use crate::app::{
+    db,
+    session::AuthenticatedSession,
+    AppState, APP_NAME,
+};
 
 /// Create project form data.
 #[derive(Debug, Deserialize, Validate)]
@@ -76,11 +80,15 @@ pub async fn create(
         .into_response();
     }
 
+
     let id = ulid::Ulid::new().to_string();
+    let organization_id = session.organization_id.clone();
+
     let project = db::projects::NewProject {
         id: id.clone(),
         title: form.title.clone(),
         user_id: session.user_id.clone(),
+        organization_id,
     };
 
     if let Err(_) = db::projects::insert(&state.db, &project).await {

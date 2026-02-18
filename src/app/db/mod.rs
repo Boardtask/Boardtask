@@ -3,6 +3,7 @@ pub mod sessions;
 pub mod email_verification;
 pub mod password_reset;
 pub mod projects;
+pub mod organizations;
 pub mod node_types;
 pub mod nodes;
 pub mod node_edges;

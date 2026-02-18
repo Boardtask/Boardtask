@@ -68,11 +68,18 @@ async fn verify_user(db: &sqlx::SqlitePool, token: &str) -> Result<String, AppEr
 
     let mut tx = db.begin().await?;
 
+    let user = db::users::find_by_id(&mut *tx, &user_id)
+        .await?
+        .ok_or_else(|| AppError::Internal)?;
+
+    let org_id = crate::app::domain::OrganizationId::from_string(&user.organization_id)
+        .map_err(|_| AppError::Internal)?;
+
     db::users::mark_verified(&mut *tx, &user_id).await?;
     db::email_verification::delete_token(&mut *tx, token).await?;
 
     let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
-    let session_id = db::sessions::create(&mut *tx, &user_id, expires_at).await?;
+    let session_id = db::sessions::create(&mut *tx, &user_id, &org_id, expires_at).await?;
 
     tx.commit().await?;
 

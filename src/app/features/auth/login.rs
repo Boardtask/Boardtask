@@ -62,9 +62,12 @@ async fn authenticate(
     let user_id = UserId::from_string(&user.id)
         .map_err(|_| AppError::Internal)?;
 
+    let organization_id = crate::app::domain::OrganizationId::from_string(&user.organization_id)
+        .map_err(|_| AppError::Internal)?;
+
     // Create session (30 days)
     let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
-    let session_id = db::create(pool, &user_id, expires_at)
+    let session_id = db::sessions::create(pool, &user_id, &organization_id, expires_at)
         .await
         .map_err(AppError::Database)?;
 

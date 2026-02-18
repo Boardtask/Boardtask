@@ -58,12 +58,24 @@ impl Seed for DevAdminUser {
             HashedPassword::from_password(&password).expect("password hashing must succeed");
         let user_id = UserId::new();
 
+        // Create organization for admin
+        let org_id = crate::app::domain::OrganizationId::new();
+        let org = crate::app::db::organizations::NewOrganization {
+            id: org_id.clone(),
+            name: "Admin Org".to_string(),
+        };
+        crate::app::db::organizations::insert(pool, &org).await?;
+
         let new_user = NewUser {
             id: user_id.clone(),
             email: email.clone(),
             password_hash,
+            organization_id: org_id.clone(),
         };
         db::users::insert(pool, &new_user).await?;
+
+        crate::app::db::organizations::add_member(pool, &org_id, &user_id, crate::app::domain::OrganizationRole::Owner).await?;
+
         db::mark_verified(pool, &user_id).await?;
 
         eprintln!(

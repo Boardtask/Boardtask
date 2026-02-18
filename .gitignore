@@ -1,5 +1,6 @@
 /target
-*.db
+.cargo-test
+*.db*
 *.db-shm
 *.db-wal
 .env

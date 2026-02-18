@@ -70,6 +70,8 @@ async fn post_node_succeeds() {
 
     let cookie = authenticated_cookie(&pool, &app, "node@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     // Create a project for the user
     let project_id = ulid::Ulid::new().to_string();
@@ -77,6 +79,7 @@ async fn post_node_succeeds() {
         id: project_id.clone(),
         title: "Test Project".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -147,12 +150,15 @@ async fn post_node_404_for_project_owned_by_other_user() {
     // Create user A with a project
     let cookie_a = authenticated_cookie(&pool, &app, "usera@example.com", "Password123").await;
     let user_a_id = user_id_from_cookie(&pool, &cookie_a).await;
+    let user_a = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_a_id).unwrap()).await.unwrap().unwrap();
+    let org_a_id = user_a.organization_id.clone();
 
     let project_id = ulid::Ulid::new().to_string();
     let project = db::NewProject {
         id: project_id.clone(),
         title: "User A Project".to_string(),
         user_id: user_a_id,
+        organization_id: org_a_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -189,6 +195,8 @@ async fn post_node_invalid_node_type_returns_error() {
 
     let cookie = authenticated_cookie(&pool, &app, "invalidtype@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     // Create a project for the user
     let project_id = ulid::Ulid::new().to_string();
@@ -196,6 +204,7 @@ async fn post_node_invalid_node_type_returns_error() {
         id: project_id.clone(),
         title: "Test Project".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -257,6 +266,8 @@ async fn post_edge_succeeds() {
 
     let cookie = authenticated_cookie(&pool, &app, "edge@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     // Create a project for the user
     let project_id = ulid::Ulid::new().to_string();
@@ -264,6 +275,7 @@ async fn post_edge_succeeds() {
         id: project_id.clone(),
         title: "Test Project".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -321,6 +333,8 @@ async fn post_edge_404_when_node_not_in_project() {
 
     let cookie = authenticated_cookie(&pool, &app, "edge404@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
 
     // Create a project for the user
     let project_id = ulid::Ulid::new().to_string();
@@ -328,6 +342,7 @@ async fn post_edge_404_when_node_not_in_project() {
         id: project_id.clone(),
         title: "Test Project".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -348,6 +363,7 @@ async fn post_edge_404_when_node_not_in_project() {
         id: other_project_id.clone(),
         title: "Other Project".to_string(),
         user_id: user_id.clone(),
+        organization_id: org_id.clone(),
     };
     boardtask::app::db::projects::insert(&pool, &other_project).await.unwrap();
 
@@ -414,6 +430,8 @@ mod get_graph {
 
         let cookie = authenticated_cookie(&pool, &app, "getgraph@example.com", "Password123").await;
         let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+        let org_id = user.organization_id.clone();
 
         // Create a project for the user
         let project_id = ulid::Ulid::new().to_string();
@@ -421,6 +439,7 @@ mod get_graph {
             id: project_id.clone(),
             title: "Test Project".to_string(),
             user_id: user_id.clone(),
+            organization_id: org_id.clone(),
         };
         boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
@@ -432,7 +451,7 @@ mod get_graph {
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
             title: "Node 1".to_string(),
             description: Some("First node".to_string()),
-        };
+            };
         boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
 
         let node2_id = ulid::Ulid::new().to_string();
@@ -442,7 +461,7 @@ mod get_graph {
             node_type_id: TASK_NODE_TYPE_ID.to_string(),
             title: "Node 2".to_string(),
             description: None,
-        };
+            };
         boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();
 
         // Create an edge

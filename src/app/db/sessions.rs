@@ -8,6 +8,7 @@ use crate::app::domain::UserId;
 pub struct Session {
     pub id: String,
     pub user_id: String,
+    pub organization_id: String,
     pub expires_at: i64,
     pub created_at: i64,
 }
@@ -16,6 +17,7 @@ pub struct Session {
 pub async fn create<'e, E>(
     executor: E,
     user_id: &UserId,
+    organization_id: &crate::app::domain::OrganizationId,
     expires_at: OffsetDateTime,
 ) -> Result<String, sqlx::Error>
 where
@@ -27,10 +29,11 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO sessions (id, user_id, organization_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&session_id)
     .bind(user_id.as_str())
+    .bind(organization_id.as_str())
     .bind(expires_at.unix_timestamp())
     .bind(now)
     .execute(executor)
@@ -47,7 +50,7 @@ pub async fn find_valid(
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query_as::<_, Session>(
-        "SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ? AND expires_at > ?",
+        "SELECT id, user_id, organization_id, expires_at, created_at FROM sessions WHERE id = ? AND expires_at > ?",
     )
     .bind(session_id)
     .bind(now)

@@ -65,22 +65,52 @@ pub async fn user_id_from_cookie(pool: &sqlx::SqlitePool, cookie: &str) -> Strin
 }
 
 /// Create a verified user directly in the database (bypasses signup flow).
-pub async fn create_verified_user(pool: &sqlx::SqlitePool, email: &str, password: &str) {
-    use boardtask::app::domain::{Email, HashedPassword, Password, UserId};
+pub async fn create_verified_user(
+    pool: &sqlx::SqlitePool,
+    email: &str,
+    password: &str,
+) -> (
+    boardtask::app::domain::UserId,
+    boardtask::app::domain::Email,
+    boardtask::app::domain::Password,
+) {
     use boardtask::app::db;
+    use boardtask::app::domain::{Email, HashedPassword, Password, UserId};
 
     let email_type = Email::new(email.to_string()).unwrap();
     let password_type = Password::new(password.to_string()).unwrap();
     let password_hash = HashedPassword::from_password(&password_type).unwrap();
     let user_id = UserId::new();
 
-    let new_user = db::NewUser {
+    // Create organization
+    let org_id = boardtask::app::domain::OrganizationId::new();
+    let org = boardtask::app::db::organizations::NewOrganization {
+        id: org_id.clone(),
+        name: "Test Org".to_string(),
+    };
+    boardtask::app::db::organizations::insert(pool, &org).await.unwrap();
+
+    let new_user = boardtask::app::db::NewUser {
         id: user_id.clone(),
         email: email_type.clone(),
         password_hash,
+        organization_id: org_id.clone(),
     };
-    db::users::insert(pool, &new_user).await.unwrap();
+    boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
+
+    // Add user to organization
+    boardtask::app::db::organizations::add_member(
+        pool,
+        &org_id,
+        &user_id,
+        boardtask::app::domain::OrganizationRole::Owner,
+    )
+    .await
+    .unwrap();
+
     db::mark_verified(pool, &user_id).await.unwrap();
+
+    (user_id, email_type, password_type)
 }
 
 /// Create verified user, login, return cookie header for authenticated requests.
@@ -90,20 +120,40 @@ pub async fn authenticated_cookie(
     email: &str,
     password: &str,
 ) -> String {
-    use boardtask::app::domain::{Email, HashedPassword, Password, UserId};
     use boardtask::app::db;
+    use boardtask::app::domain::{Email, HashedPassword, Password, UserId};
 
     let email_type = Email::new(email.to_string()).unwrap();
     let password_type = Password::new(password.to_string()).unwrap();
     let password_hash = HashedPassword::from_password(&password_type).unwrap();
     let user_id = UserId::new();
 
-    let new_user = db::NewUser {
+    // Create organization
+    let org_id = boardtask::app::domain::OrganizationId::new();
+    let org = boardtask::app::db::organizations::NewOrganization {
+        id: org_id.clone(),
+        name: "Test Org".to_string(),
+    };
+    boardtask::app::db::organizations::insert(pool, &org).await.unwrap();
+
+    let new_user = boardtask::app::db::NewUser {
         id: user_id.clone(),
         email: email_type.clone(),
         password_hash,
+        organization_id: org_id.clone(),
     };
-    db::users::insert(pool, &new_user).await.unwrap();
+    boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
+
+    // Add user to organization
+    boardtask::app::db::organizations::add_member(
+        pool,
+        &org_id,
+        &user_id,
+        boardtask::app::domain::OrganizationRole::Owner,
+    )
+    .await
+    .unwrap();
+
     db::mark_verified(pool, &user_id).await.unwrap();
 
     let login_body = login_form_body(email, password);

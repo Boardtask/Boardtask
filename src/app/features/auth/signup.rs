@@ -54,19 +54,38 @@ async fn create_account(
     let password_hash = HashedPassword::from_password(password)
         .map_err(|_| AppError::Internal)?;
 
-    // Generate user ID
+    // Generate user ID and Organization ID
     let user_id = UserId::new();
+    let org_id = crate::app::domain::OrganizationId::new();
 
     // Create new user
     let new_user = db::NewUser {
         id: user_id.clone(),
         email: email.clone(),
         password_hash,
+        organization_id: org_id.clone(),
     };
 
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
+    // Create organization
+    let org_name = format!("{}'s Organization", email.as_str().split('@').next().unwrap_or("My"));
+    let new_org = db::organizations::NewOrganization {
+        id: org_id.clone(),
+        name: org_name,
+    };
+    db::organizations::insert(&mut *tx, &new_org).await.map_err(AppError::Database)?;
+
+    // Insert user
     db::users::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
+
+    // Add user to organization
+    db::organizations::add_member(
+        &mut *tx, 
+        &org_id, 
+        &user_id, 
+        crate::app::domain::OrganizationRole::Owner
+    ).await.map_err(AppError::Database)?;
 
     // Generate verification token
     let token = UserId::new().as_str();

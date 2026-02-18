@@ -50,7 +50,7 @@ pub async fn create_node(
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
     // Ensure user owns the project
-    let project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
+    let project = super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
 
     // Validate node_type_id exists
     let _node_type = db::node_types::find_by_id(&state.db, &request.node_type_id)

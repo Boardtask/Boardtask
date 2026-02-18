@@ -26,7 +26,7 @@ pub async fn get_graph(
     Path(project_id): Path<String>,
 ) -> Result<Json<GraphResponse>, AppError> {
     // Ensure user owns the project
-    super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id).await?;
+    super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
 
     // Fetch nodes and edges
     let nodes = db::nodes::find_by_project(&state.db, &project_id).await?;

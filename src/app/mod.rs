@@ -32,6 +32,7 @@ pub fn routes(_state: AppState) -> Router<AppState> {
 pub mod config;
 pub mod domain;
 pub mod db;
+pub mod single_writer;
 pub mod session;
 pub mod error;
 pub mod features;

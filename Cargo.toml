@@ -30,7 +30,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 validator = { version = "0.18", features = ["derive"] }
 argon2 = "0.5"
-ulid = "1.1"
+ulid = { version = "1.1", features = ["serde"] }
 time = "0.3"
 rand = "0.9"
 rand_core = { version = "0.6", features = ["getrandom"] }
@@ -43,6 +43,9 @@ thiserror = "1.0"
 # Token generation
 hex = "0.4"
 urlencoding = "2"
+strum = "0.26"
+strum_macros = "0.26"
+fd-lock = "4"
 
 [[bin]]
 name = "seed"

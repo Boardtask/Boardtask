@@ -8,6 +8,7 @@ pub struct Project {
     pub title: String,
     pub user_id: String,
     pub created_at: i64,
+    pub organization_id: String,
 }
 
 /// Data structure for inserting a new project.
@@ -15,6 +16,7 @@ pub struct NewProject {
     pub id: String,
     pub title: String,
     pub user_id: String,
+    pub organization_id: String,
 }
 
 /// Insert a new project into the database.
@@ -28,12 +30,13 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO projects (id, title, user_id, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO projects (id, title, user_id, created_at, organization_id) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&project.id)
     .bind(&project.title)
     .bind(&project.user_id)
     .bind(now)
+    .bind(&project.organization_id)
     .execute(executor)
     .await?;
 
@@ -46,7 +49,7 @@ pub async fn find_by_user_id(
     user_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at FROM projects WHERE user_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE user_id = ? ORDER BY created_at DESC",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -59,7 +62,7 @@ pub async fn find_by_id(
     id: &str,
 ) -> Result<Option<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at FROM projects WHERE id = ?",
+        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
