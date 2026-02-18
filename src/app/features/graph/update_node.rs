@@ -4,7 +4,11 @@ use axum::{
     routing::patch,
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::Deserializer,
+    Deserialize,
+    Serialize,
+};
 use validator::Validate;
 
 use crate::app::{
@@ -13,6 +17,16 @@ use crate::app::{
     session::ApiAuthenticatedSession,
     AppState,
 };
+
+/// Deserializes a JSON value so that missing key => None, present null => Some(None), present value => Some(Some(v)).
+/// Required to distinguish "omit field" (leave unchanged) from "field: null" (clear estimate).
+fn deserialize_optional_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
 
 /// Request body for updating a node (partial update).
 #[derive(Debug, Deserialize, Validate)]
@@ -23,6 +37,7 @@ pub struct UpdateNodeRequest {
     pub description: Option<String>,
     pub node_type_id: Option<String>,
     /// Omit = unchanged, null = clear estimate.
+    #[serde(default, deserialize_with = "deserialize_optional_option")]
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
     pub estimated_minutes: Option<Option<i64>>,
 }

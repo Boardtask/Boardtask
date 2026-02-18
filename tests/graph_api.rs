@@ -232,6 +232,89 @@ async fn post_node_invalid_node_type_returns_error() {
     }
 }
 
+mod patch_node {
+    use super::*;
+
+    /// PATCH with estimated_minutes: null clears the estimate and persists (custom deserializer preserves null vs omit).
+    #[tokio::test]
+    async fn patch_node_clearing_estimated_minutes_persists() {
+        let pool = test_pool().await;
+        let app = test_router(pool.clone());
+        ensure_graph_seeds(&pool).await;
+
+        let cookie = authenticated_cookie(&pool, &app, "patchclear@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user = boardtask::app::db::users::find_by_id(
+            &pool,
+            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let org_id = user.organization_id.clone();
+
+        let project_id = ulid::Ulid::new().to_string();
+        let project = db::NewProject {
+            id: project_id.clone(),
+            title: "Patch Test Project".to_string(),
+            user_id: user_id.clone(),
+            organization_id: org_id.clone(),
+        };
+        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            title: "Node With Estimate".to_string(),
+            description: None,
+            estimated_minutes: Some(30),
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        // Clear estimated_minutes by sending explicit null
+        let request_body = serde_json::json!({
+            "estimated_minutes": null
+        });
+
+        let request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(request_body.to_string()))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(body["estimated_minutes"].is_null(), "PATCH response should have null estimated_minutes");
+
+        // Verify persistence: GET graph and assert the node has null estimated_minutes
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let get_response = app.oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+
+        let get_body_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let get_body: serde_json::Value = serde_json::from_slice(&get_body_bytes).unwrap();
+        let nodes = get_body["nodes"].as_array().unwrap();
+        let updated = nodes.iter().find(|n| n["id"] == node_id).unwrap();
+        assert!(
+            updated["estimated_minutes"].is_null(),
+            "Graph should return node with null estimated_minutes after clear"
+        );
+    }
+}
+
 mod edges {
     use super::*;
 
