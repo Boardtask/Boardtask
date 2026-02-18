@@ -53,7 +53,7 @@ const registerGraph = () => {
                         style: {
                             'shape': 'round-rectangle',
                             'width': 150,
-                            'height': 50,
+                            'height': 80,
                             'opacity': 0,
                             'label': ''
                         }
@@ -91,7 +91,8 @@ const registerGraph = () => {
                             const typeColor = data.node_type_color || '#4F46E5';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            return `<div class="cy-node" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                            const compactClass = !estimateStr ? ' cy-node--compact' : '';
+                            return `<div class="cy-node${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
                                 ${estimateHtml}
@@ -109,7 +110,8 @@ const registerGraph = () => {
                             const typeColor = data.node_type_color || '#4F46E5';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            return `<div class="cy-node cy-node--selected" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                            const compactClass = !estimateStr ? ' cy-node--compact' : '';
+                            return `<div class="cy-node cy-node--selected${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
                                 <div class="cy-node__label">${data.label}</div>
                                 ${estimateHtml}

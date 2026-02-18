@@ -3180,8 +3180,9 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 11. CYTOSCAPE GRAPH — Custom Styles
 ========================================================================== */
 .cy-node {
-  width: 150px;
-  height: 50px;
+  width: 100%;
+  min-height: 80px;
+  height: 100%;
   background-color: #ffffff;
   color: #374151;
   /* Gray-700 */ border-radius: 6px;
@@ -3192,12 +3193,13 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
   align-items: flex-start;
   justify-content: center;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  padding: 4px 12px;
+  padding: 8px 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   user-select: none;
   overflow: hidden;
 }
+.cy-node--compact { min-height: 60px; height: auto; }
 .cy-node--selected {
   background-color: #ffffff;
   transform: scale(1.05);
@@ -3213,7 +3215,7 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
   margin-bottom: 2px;
   pointer-events: none;
 }
-.cy-node__label { font-family: inherit; font-size: 13px; font-weight: 600; text-align: left; pointer-events: none; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; color: #111827; /* Gray-900 */ }
+.cy-node__label { font-family: inherit; font-size: 13px; font-weight: 600; text-align: left; pointer-events: none; line-height: 1.3; white-space: normal; overflow: hidden; text-overflow: ellipsis; width: 100%; color: #111827; /* Gray-900 */ display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; word-break: break-word; }
 .cy-node__estimate { font-size: 10px; color: #6b7280; margin-top: 2px; }
 /* Side Drawer for Node Editing */
 .graph-container { min-height: 300px; width: 100%; position: relative; background: #fdfdfd; }
