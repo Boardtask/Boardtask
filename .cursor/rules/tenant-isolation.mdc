@@ -1,0 +1,13 @@
+---
+description: Ensure all app routes and data access are scoped to the tenant (organization)
+globs: src/app/**/*
+alwaysApply: true
+---
+
+# Tenant Isolation (Routes and Data)
+
+- **Never trust session org for resource identity.** For resource-by-id flows (get/update project X, node Y), load the resource first, then call `tenant::require_org_member(pool, user_id, &resource.organization_id)`—use the resource’s org, not the session’s.
+- **Validate membership on every read/write of tenant data.** Call `tenant::require_org_member` before DB access; return NotFound when not a member so we don’t leak existence.
+- **List/create for “my org”:** use `session.organization_id`, call `require_org_member(..., session.organization_id)`, and pass `session.organization_id` into the DB (e.g. `list_for_org`, `find_by_user_and_org`).
+- **DB layer:** for tenant-scoped data expose only org-scoped APIs (`list_for_org`, `find_by_id_and_org`). No global “list all” for tenant data.
+- **Reference:** `src/app/tenant.rs` (`require_org_member`), `src/app/features/graph/helpers.rs` (`ensure_project_accessible`).

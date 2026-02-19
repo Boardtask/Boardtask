@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Integrations · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8">
+    <h1 class="text-2xl font-bold mb-6">Integrations</h1>
+
+    <p class="mb-6 text-gray-700">
+        Connect Boardtask to your project management tools. Define tasks here, then sync them to issues and boards elsewhere.
+        We are building these integrations step by step—you will see them available here as they launch.
+    </p>
+
+    <ul class="space-y-4">
+        {% for integration in integrations %}
+        <li class="border border-gray-200 rounded-md p-4">
+            <h2 class="text-lg font-semibold text-gray-900">{{ integration.name }}</h2>
+            <p class="mt-1 text-sm text-gray-600">
+                This integration is not yet available. We are working on bringing {{ integration.name }} support to Boardtask—check back soon.
+            </p>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <p class="mt-8 text-center">
+        <a href="/app" class="text-blue-600 hover:text-blue-500">Back to dashboard</a>
+    </p>
+</div>
+{% endblock %}

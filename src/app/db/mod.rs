@@ -9,6 +9,7 @@ pub mod nodes;
 pub mod node_edges;
 pub mod project_slots;
 pub mod task_statuses;
+pub mod integrations;
 
 pub use project_slots::{NewProjectSlot, ProjectSlot};
 pub use users::{find_by_email, User, NewUser, mark_verified, update_password};
