@@ -47,9 +47,7 @@ async fn create_post_requires_authentication() {
 
 #[tokio::test]
 async fn create_project_succeeds() {
-    let pool = common::test_pool().await;
-    let app = common::test_router(pool.clone());
-    let cookie = authenticated_cookie(&pool, &app, "create@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app) = setup_user_and_project("create@example.com", "Password123").await;
 
     let body = create_project_form_body("My Project");
     let request = http::Request::builder()
@@ -88,9 +86,7 @@ async fn create_project_succeeds() {
 
 #[tokio::test]
 async fn create_project_empty_title_returns_error() {
-    let pool = common::test_pool().await;
-    let app = common::test_router(pool.clone());
-    let cookie = authenticated_cookie(&pool, &app, "empty@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app) = setup_user_and_project("empty@example.com", "Password123").await;
 
     let body = create_project_form_body("");
     let request = http::Request::builder()
@@ -133,9 +129,7 @@ async fn list_projects_requires_authentication() {
 
 #[tokio::test]
 async fn list_projects_shows_user_projects() {
-    let pool = common::test_pool().await;
-    let app = common::test_router(pool.clone());
-    let cookie = authenticated_cookie(&pool, &app, "list@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app) = setup_user_and_project("list@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
     let org_id = user.organization_id.clone();
@@ -196,23 +190,7 @@ async fn show_project_requires_authentication() {
 
 #[tokio::test]
 async fn show_project_renders() {
-    let pool = common::test_pool().await;
-    let app = common::test_router(pool.clone());
-    let cookie = authenticated_cookie(&pool, &app, "show@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project_title = "My Awesome Project";
-    use boardtask::app::db::projects;
-    let new_project = projects::NewProject {
-        id: project_id.clone(),
-        title: project_title.to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    projects::insert(&pool, &new_project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("show@example.com", "Password123").await;
 
     let request = http::Request::builder()
         .method("GET")
@@ -226,7 +204,7 @@ async fn show_project_renders() {
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body_str = String::from_utf8_lossy(&body_bytes);
     assert!(
-        body_str.contains(project_title) && body_str.contains(&project_id),
+        body_str.contains("Test Project") && body_str.contains(&project_id),
         "Expected project title and id in body, got: {}",
         body_str
     );
@@ -234,9 +212,7 @@ async fn show_project_renders() {
 
 #[tokio::test]
 async fn show_project_404_for_nonexistent() {
-    let pool = common::test_pool().await;
-    let app = common::test_router(pool.clone());
-    let cookie = authenticated_cookie(&pool, &app, "404@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app) = setup_user_and_project("404@example.com", "Password123").await;
 
     let nonexistent_id = "01HZ9999999999999999999999";
     let request = http::Request::builder()

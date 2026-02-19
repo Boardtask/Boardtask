@@ -64,6 +64,40 @@ pub async fn user_id_from_cookie(pool: &sqlx::SqlitePool, cookie: &str) -> Strin
     session.user_id
 }
 
+/// Seeds graph, creates a user (via authenticated_cookie), creates one project.
+/// Returns (cookie, project_id, pool, app). Use pool for extra DB setup (e.g. nodes); use app for requests.
+pub async fn setup_user_and_project(
+    email: &str,
+    password: &str,
+) -> (String, String, SqlitePool, axum::Router) {
+    use boardtask::app::db::{self, projects};
+
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, email, password).await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = db::users::find_by_id(
+        &pool,
+        &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+    )
+    .await
+    .unwrap()
+    .expect("user should exist");
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: user.organization_id.clone(),
+    };
+    projects::insert(&pool, &project).await.unwrap();
+
+    (cookie, project_id, pool, app)
+}
+
 /// Create a verified user directly in the database (bypasses signup flow).
 pub async fn create_verified_user(
     pool: &sqlx::SqlitePool,

@@ -67,24 +67,7 @@ async fn post_node_returns_401_without_valid_session() {
 
 #[tokio::test]
 async fn post_node_succeeds() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "node@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    // Create a project for the user
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("node@example.com", "Password123").await;
 
     let request_body = serde_json::json!({
         "node_type_id": TASK_NODE_TYPE_ID,
@@ -158,26 +141,7 @@ async fn post_node_404_for_nonexistent_project() {
 
 #[tokio::test]
 async fn post_node_404_for_project_owned_by_other_user() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    // Create user A with a project
-    let cookie_a = authenticated_cookie(&pool, &app, "usera@example.com", "Password123").await;
-    let user_a_id = user_id_from_cookie(&pool, &cookie_a).await;
-    let user_a = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_a_id).unwrap()).await.unwrap().unwrap();
-    let org_a_id = user_a.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "User A Project".to_string(),
-        user_id: user_a_id,
-        organization_id: org_a_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
-
-    // Create user B
+    let (_cookie_a, project_id, pool, app) = setup_user_and_project("usera@example.com", "Password123").await;
     let cookie_b = authenticated_cookie(&pool, &app, "userb@example.com", "Password123").await;
 
     let request_body = serde_json::json!({
@@ -204,24 +168,7 @@ async fn post_node_404_for_project_owned_by_other_user() {
 
 #[tokio::test]
 async fn post_node_invalid_node_type_returns_error() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "invalidtype@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    // Create a project for the user
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("invalidtype@example.com", "Password123").await;
 
     let request_body = serde_json::json!({
         "node_type_id": "invalid-node-type-id",
@@ -246,23 +193,7 @@ async fn post_node_invalid_node_type_returns_error() {
 
 #[tokio::test]
 async fn post_node_invalid_status_id_returns_error() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "invalidstatus@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("invalidstatus@example.com", "Password123").await;
 
     let request_body = serde_json::json!({
         "node_type_id": TASK_NODE_TYPE_ID,
@@ -288,23 +219,7 @@ async fn post_node_invalid_status_id_returns_error() {
 
 #[tokio::test]
 async fn post_node_with_slot_id_succeeds() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "nodeslot@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("nodeslot@example.com", "Password123").await;
 
     let post_slot_req = http::Request::builder()
         .method("POST")
@@ -342,23 +257,7 @@ async fn post_node_with_slot_id_succeeds() {
 
 #[tokio::test]
 async fn post_node_invalid_slot_id_returns_error() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "invslot@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("invslot@example.com", "Password123").await;
 
     let request_body = serde_json::json!({
         "node_type_id": TASK_NODE_TYPE_ID,
@@ -384,23 +283,10 @@ async fn post_node_invalid_slot_id_returns_error() {
 
 #[tokio::test]
 async fn post_node_slot_id_from_other_project_returns_error() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "otherslot@example.com", "Password123").await;
+    let (cookie, project_id, pool, app) = setup_user_and_project("otherslot@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
     let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
     let other_project_id = ulid::Ulid::new().to_string();
     let other_project = db::NewProject {
@@ -444,23 +330,7 @@ async fn post_node_slot_id_from_other_project_returns_error() {
 
 #[tokio::test]
 async fn post_node_with_status_then_patch_and_get_graph() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "statusflow@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Status Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, _pool, app) = setup_user_and_project("statusflow@example.com", "Password123").await;
 
     // Create node with explicit "In progress" status
     let request_body = serde_json::json!({
@@ -527,29 +397,7 @@ mod patch_node {
     /// PATCH with estimated_minutes: null clears the estimate and persists (custom deserializer preserves null vs omit).
     #[tokio::test]
     async fn patch_node_clearing_estimated_minutes_persists() {
-        let pool = test_pool().await;
-        let app = test_router(pool.clone());
-        ensure_graph_seeds(&pool).await;
-
-        let cookie = authenticated_cookie(&pool, &app, "patchclear@example.com", "Password123").await;
-        let user_id = user_id_from_cookie(&pool, &cookie).await;
-        let user = boardtask::app::db::users::find_by_id(
-            &pool,
-            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        let org_id = user.organization_id.clone();
-
-        let project_id = ulid::Ulid::new().to_string();
-        let project = db::NewProject {
-            id: project_id.clone(),
-            title: "Patch Test Project".to_string(),
-            user_id: user_id.clone(),
-            organization_id: org_id.clone(),
-        };
-        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+        let (cookie, project_id, pool, app) = setup_user_and_project("patchclear@example.com", "Password123").await;
 
         let node_id = ulid::Ulid::new().to_string();
         let node = db::nodes::NewNode {
@@ -607,29 +455,7 @@ mod patch_node {
 
     #[tokio::test]
     async fn patch_node_set_slot_id_then_clear() {
-        let pool = test_pool().await;
-        let app = test_router(pool.clone());
-        ensure_graph_seeds(&pool).await;
-
-        let cookie = authenticated_cookie(&pool, &app, "patchslot@example.com", "Password123").await;
-        let user_id = user_id_from_cookie(&pool, &cookie).await;
-        let user = boardtask::app::db::users::find_by_id(
-            &pool,
-            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        let org_id = user.organization_id.clone();
-
-        let project_id = ulid::Ulid::new().to_string();
-        let project = db::NewProject {
-            id: project_id.clone(),
-            title: "Slot Patch Project".to_string(),
-            user_id: user_id.clone(),
-            organization_id: org_id.clone(),
-        };
-        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+        let (cookie, project_id, pool, app) = setup_user_and_project("patchslot@example.com", "Password123").await;
 
         let post_slot_req = http::Request::builder()
             .method("POST")
@@ -752,29 +578,7 @@ mod patch_node {
 
     #[tokio::test]
     async fn patch_node_invalid_slot_id_returns_400() {
-        let pool = test_pool().await;
-        let app = test_router(pool.clone());
-        ensure_graph_seeds(&pool).await;
-
-        let cookie = authenticated_cookie(&pool, &app, "patchinvslot@example.com", "Password123").await;
-        let user_id = user_id_from_cookie(&pool, &cookie).await;
-        let user = boardtask::app::db::users::find_by_id(
-            &pool,
-            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        let org_id = user.organization_id.clone();
-
-        let project_id = ulid::Ulid::new().to_string();
-        let project = db::NewProject {
-            id: project_id.clone(),
-            title: "Test Project".to_string(),
-            user_id: user_id.clone(),
-            organization_id: org_id.clone(),
-        };
-        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+        let (cookie, project_id, pool, app) = setup_user_and_project("patchinvslot@example.com", "Password123").await;
 
         let node_id = ulid::Ulid::new().to_string();
         let node = db::nodes::NewNode {
@@ -837,24 +641,7 @@ mod edges {
 
 #[tokio::test]
 async fn post_edge_succeeds() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
-
-    let cookie = authenticated_cookie(&pool, &app, "edge@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-    let org_id = user.organization_id.clone();
-
-    // Create a project for the user
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+    let (cookie, project_id, pool, app) = setup_user_and_project("edge@example.com", "Password123").await;
 
     // Create two nodes in the project
     let parent_node_id = ulid::Ulid::new().to_string();
@@ -909,25 +696,105 @@ async fn post_edge_succeeds() {
 }
 
 #[tokio::test]
-async fn post_edge_404_when_node_not_in_project() {
-    let pool = test_pool().await;
-    let app = test_router(pool.clone());
-    ensure_graph_seeds(&pool).await;
+async fn post_edge_rejects_self_referential() {
+    let (cookie, project_id, pool, app) = setup_user_and_project("selfedge@example.com", "Password123").await;
 
-    let cookie = authenticated_cookie(&pool, &app, "edge404@example.com", "Password123").await;
+    let node_id = ulid::Ulid::new().to_string();
+    let node = db::nodes::NewNode {
+        id: node_id.clone(),
+        project_id: project_id.clone(),
+        node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
+        title: "Single Node".to_string(),
+        description: None,
+        estimated_minutes: None,
+        slot_id: None,
+    };
+    boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "parent_id": node_id,
+        "child_id": node_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/edges", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert!(body["error"].as_str().unwrap().contains("node to itself"));
+}
+
+#[tokio::test]
+async fn post_edge_duplicate_returns_conflict_or_error() {
+    let (cookie, project_id, pool, app) = setup_user_and_project("dupedge@example.com", "Password123").await;
+
+    let parent_node_id = ulid::Ulid::new().to_string();
+    let child_node_id = ulid::Ulid::new().to_string();
+    let parent_node = db::nodes::NewNode {
+        id: parent_node_id.clone(),
+        project_id: project_id.clone(),
+        node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
+        title: "Parent".to_string(),
+        description: None,
+        estimated_minutes: None,
+        slot_id: None,
+    };
+    let child_node = db::nodes::NewNode {
+        id: child_node_id.clone(),
+        project_id: project_id.clone(),
+        node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
+        title: "Child".to_string(),
+        description: None,
+        estimated_minutes: None,
+        slot_id: None,
+    };
+    boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
+    boardtask::app::db::nodes::insert(&pool, &child_node).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "parent_id": parent_node_id,
+        "child_id": child_node_id
+    });
+
+    let request1 = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/edges", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+    let response1 = app.clone().oneshot(request1).await.unwrap();
+    assert_eq!(response1.status(), http::StatusCode::CREATED);
+
+    let request2 = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/edges", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+    let response2 = app.oneshot(request2).await.unwrap();
+    assert!(!response2.status().is_success(), "duplicate edge should not succeed");
+    assert_eq!(response2.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn post_edge_404_when_node_not_in_project() {
+    let (cookie, project_id, pool, app) = setup_user_and_project("edge404@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
     let org_id = user.organization_id.clone();
-
-    // Create a project for the user
-    let project_id = ulid::Ulid::new().to_string();
-    let project = db::NewProject {
-        id: project_id.clone(),
-        title: "Test Project".to_string(),
-        user_id: user_id.clone(),
-        organization_id: org_id.clone(),
-    };
-    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
     // Create a node in the project
     let project_node_id = ulid::Ulid::new().to_string();
@@ -1021,24 +888,7 @@ mod get_graph {
 
     #[tokio::test]
     async fn get_graph_succeeds() {
-        let pool = test_pool().await;
-        let app = test_router(pool.clone());
-        ensure_graph_seeds(&pool).await;
-
-        let cookie = authenticated_cookie(&pool, &app, "getgraph@example.com", "Password123").await;
-        let user_id = user_id_from_cookie(&pool, &cookie).await;
-        let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-        let org_id = user.organization_id.clone();
-
-        // Create a project for the user
-        let project_id = ulid::Ulid::new().to_string();
-        let project = db::NewProject {
-            id: project_id.clone(),
-            title: "Test Project".to_string(),
-            user_id: user_id.clone(),
-            organization_id: org_id.clone(),
-        };
-        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+        let (cookie, project_id, pool, app) = setup_user_and_project("getgraph@example.com", "Password123").await;
 
         // GET slots (empty), POST slot, GET slots, POST duplicate name → 400
         let get_slots_req = http::Request::builder()
