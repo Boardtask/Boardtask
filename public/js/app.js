@@ -179,6 +179,7 @@ const registerGraph = () => {
                     const firstId = this.selectedNodeIds.shift();
                     this.cy.$id(firstId).unselect();
                 }
+                this.refreshNodeLabels();
             });
 
             this.cy.on('unselect', 'node', (evt) => {
@@ -188,6 +189,7 @@ const registerGraph = () => {
                 if (this.editingNode && this.editingNode.id === id) {
                     this.editingNode = null;
                 }
+                this.refreshNodeLabels();
             });
 
             this.cy.on('tap', (evt) => {
@@ -195,6 +197,7 @@ const registerGraph = () => {
                     this.cy.nodes().unselect();
                     this.selectedNodeIds = [];
                     this.editingNode = null;
+                    this.refreshNodeLabels();
                 }
             });
 
