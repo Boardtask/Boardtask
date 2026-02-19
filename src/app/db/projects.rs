@@ -43,16 +43,33 @@ where
     Ok(())
 }
 
-/// Find all projects for a user.
-pub async fn find_by_user_id(
+/// Find all projects for a user scoped by organisation.
+pub async fn find_by_user_and_org(
     pool: &sqlx::SqlitePool,
     user_id: &str,
+    organization_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE user_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC",
     )
     .bind(user_id)
+    .bind(organization_id)
     .fetch_all(pool)
+    .await
+}
+
+/// Find a project by ID and organisation. Returns None if project doesn't exist or belongs to another org.
+pub async fn find_by_id_and_org(
+    pool: &sqlx::SqlitePool,
+    id: &str,
+    organization_id: &str,
+) -> Result<Option<Project>, sqlx::Error> {
+    sqlx::query_as::<_, Project>(
+        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE id = ? AND organization_id = ?",
+    )
+    .bind(id)
+    .bind(organization_id)
+    .fetch_optional(pool)
     .await
 }
 

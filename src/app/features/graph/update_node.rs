@@ -89,7 +89,8 @@ pub async fn update_node(
     Path(params): Path<super::types::NodePathParams>,
     Json(request): Json<UpdateNodeRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), AppError> {
-    let _project = super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id, &session.organization_id).await?;
+    // Validate org membership on every write
+    let _project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     let node = db::nodes::find_by_id(&state.db, &params.id)
         .await?

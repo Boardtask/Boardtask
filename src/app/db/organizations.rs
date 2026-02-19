@@ -93,3 +93,23 @@ where
 
     Ok(count > 0)
 }
+
+/// Find a member's role in an organization. Returns None if not a member.
+pub async fn find_member_role<'e, E>(
+    executor: E,
+    organization_id: &OrganizationId,
+    user_id: &UserId,
+) -> Result<Option<OrganizationRole>, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    let row: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM organization_members WHERE organization_id = ? AND user_id = ?",
+    )
+    .bind(organization_id.as_str())
+    .bind(user_id.as_str())
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.and_then(|r| r.parse::<OrganizationRole>().ok()))
+}

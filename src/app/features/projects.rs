@@ -12,6 +12,7 @@ use validator::Validate;
 use crate::app::{
     db,
     session::AuthenticatedSession,
+    tenant,
     AppState, APP_NAME,
 };
 
@@ -81,6 +82,11 @@ pub async fn create(
     }
 
 
+    // Validate org membership on every write - never trust session
+    if let Err(_) = tenant::require_org_member(&state.db, &session.user_id, &session.organization_id).await {
+        return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
+    }
+
     let id = ulid::Ulid::new().to_string();
     let organization_id = session.organization_id.clone();
 
@@ -102,12 +108,17 @@ pub async fn create(
     Redirect::to("/app/projects").into_response()
 }
 
-/// GET /app/projects — List user's projects.
+/// GET /app/projects — List user's projects (scoped by org).
 pub async fn list(
     AuthenticatedSession(session): AuthenticatedSession,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let projects = match db::projects::find_by_user_id(&state.db, &session.user_id).await {
+    // Validate org membership - scope every read
+    if let Err(_) = tenant::require_org_member(&state.db, &session.user_id, &session.organization_id).await {
+        return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
+    }
+
+    let projects = match db::projects::find_by_user_and_org(&state.db, &session.user_id, &session.organization_id).await {
         Ok(p) => p,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
@@ -131,8 +142,8 @@ pub async fn show(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
 
-    // Ensure user owns the project
-    if project.user_id != session.user_id {
+    // Validate org membership - never trust session, validate against resource's org
+    if let Err(_) = tenant::require_org_member(&state.db, &session.user_id, &project.organization_id).await {
         return (StatusCode::NOT_FOUND, "Project not found").into_response();
     }
 

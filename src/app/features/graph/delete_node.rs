@@ -18,8 +18,8 @@ pub async fn delete_node(
     State(state): State<AppState>,
     Path(params): Path<super::types::NodePathParams>,
 ) -> Result<StatusCode, AppError> {
-    // Ensure user owns the project
-    let _project = super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id, &session.organization_id).await?;
+    // Validate org membership on every write
+    let _project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     // Load the existing node
     let node = db::nodes::find_by_id(&state.db, &params.id)
