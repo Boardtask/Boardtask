@@ -73,6 +73,8 @@ function buildNodeLabelHtml(data, opts) {
 const registerGraph = () => {
     if (!window.Alpine) return;
 
+    Alpine.store('projectFlash', { show: false, message: '' });
+
     if (Alpine.data('graph')) return;
 
     Alpine.data('graph', (projectId) => ({
@@ -86,7 +88,6 @@ const registerGraph = () => {
         projectSlots: [],
         editingNode: null, // { id, title, description, node_type_id, status_id, slot_id, estimated_amount, estimated_unit }
         saving: false,
-        saveSuccess: false,
         settingsOpen: false,
         highlightBlockedTodos: true,
         editingSlotId: null,
@@ -182,7 +183,6 @@ const registerGraph = () => {
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
-                this.saveSuccess = false;
 
                 if (this.selectedNodeIds.length > 2) {
                     const firstId = this.selectedNodeIds.shift();
@@ -457,7 +457,6 @@ const registerGraph = () => {
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
-                this.saveSuccess = false;
             } catch (error) {
                 alert(`Error adding child node: ${error.message}`);
             }
@@ -519,7 +518,6 @@ const registerGraph = () => {
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
-                this.saveSuccess = false;
             } catch (error) {
                 alert(`Error adding parent node: ${error.message}`);
             }
@@ -592,7 +590,6 @@ const registerGraph = () => {
             if (!this.editingNode || this.saving) return;
 
             this.saving = true;
-            this.saveSuccess = false;
 
             const amount = this.editingNode.estimated_amount;
             const unit = this.editingNode.estimated_unit || 'minutes';
@@ -630,9 +627,9 @@ const registerGraph = () => {
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.recomputeMutedForGraph();
-                this.saveSuccess = true;
+                Alpine.store('projectFlash', { show: true, message: 'Save Success!' });
                 setTimeout(() => {
-                    this.saveSuccess = false;
+                    Alpine.store('projectFlash', { show: false, message: '' });
                 }, 3000);
             } catch (error) {
                 alert(`Error saving node: ${error.message}`);
