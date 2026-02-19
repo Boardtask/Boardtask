@@ -431,6 +431,21 @@ const registerGraph = () => {
                     { group: 'edges', data: { source: parentId, target: node.id } }
                 ]);
                 this.runLayout();
+                this.cy.nodes().unselect();
+                this.cy.$id(node.id).select();
+                this.selectedNodeIds = [node.id];
+                const { amount: estimatedAmount, unit: estimatedUnit } = minutesToAmountAndUnit(node.estimated_minutes ?? null);
+                this.editingNode = {
+                    id: node.id,
+                    title: node.title,
+                    description: node.description || '',
+                    node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
+                    status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
+                    slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    estimated_amount: estimatedAmount,
+                    estimated_unit: estimatedUnit
+                };
+                this.saveSuccess = false;
             } catch (error) {
                 alert(`Error adding child node: ${error.message}`);
             }
@@ -478,6 +493,21 @@ const registerGraph = () => {
                     { group: 'edges', data: { source: node.id, target: childId } }
                 ]);
                 this.runLayout();
+                this.cy.nodes().unselect();
+                this.cy.$id(node.id).select();
+                this.selectedNodeIds = [node.id];
+                const { amount: estimatedAmount, unit: estimatedUnit } = minutesToAmountAndUnit(node.estimated_minutes ?? null);
+                this.editingNode = {
+                    id: node.id,
+                    title: node.title,
+                    description: node.description || '',
+                    node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
+                    status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
+                    slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    estimated_amount: estimatedAmount,
+                    estimated_unit: estimatedUnit
+                };
+                this.saveSuccess = false;
             } catch (error) {
                 alert(`Error adding parent node: ${error.message}`);
             }
