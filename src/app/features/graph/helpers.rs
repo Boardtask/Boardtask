@@ -31,8 +31,14 @@ pub async fn ensure_project_accessible(
         .map_err(AppError::Database)?
         .ok_or_else(|| AppError::NotFound("Project not found".to_string()))?;
 
-    // Validate membership from DB - never trust session org
-    let _role = tenant::require_org_member(pool, user_id, &project.organization_id).await?;
+    // Validate membership from DB - never trust session org. Map generic "Not found" to
+    // "Project not found" so API returns a consistent message for no-access.
+    let _role = tenant::require_org_member(pool, user_id, &project.organization_id)
+        .await
+        .map_err(|e| match &e {
+            AppError::NotFound(_) => AppError::NotFound("Project not found".to_string()),
+            _ => e,
+        })?;
 
     Ok(project)
 }

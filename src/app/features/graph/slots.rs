@@ -50,7 +50,7 @@ pub async fn list_slots(
     State(state): State<AppState>,
     Path(project_id): Path<String>,
 ) -> Result<Json<SlotsResponse>, AppError> {
-    super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
+    super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
     let slots = db::project_slots::find_by_project(&state.db, &project_id).await?;
     Ok(Json(SlotsResponse { slots }))
 }
@@ -66,7 +66,7 @@ pub async fn create_slot(
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
-    super::helpers::ensure_project_owned(&state.db, &project_id, &session.user_id, &session.organization_id).await?;
+    super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
 
     let existing = db::project_slots::find_by_project(&state.db, &project_id).await?;
     if existing.iter().any(|s| s.name == request.name) {
@@ -101,7 +101,7 @@ pub async fn update_slot(
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
-    super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id, &session.organization_id).await?;
+    super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     let slot = db::project_slots::find_by_id(&state.db, &params.id)
         .await?
@@ -129,7 +129,7 @@ pub async fn delete_slot(
     State(state): State<AppState>,
     Path(params): Path<SlotPathParams>,
 ) -> Result<StatusCode, AppError> {
-    super::helpers::ensure_project_owned(&state.db, &params.project_id, &session.user_id, &session.organization_id).await?;
+    super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     let slot = db::project_slots::find_by_id(&state.db, &params.id)
         .await?
