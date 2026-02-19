@@ -15,6 +15,8 @@ const DEFAULTS = {
     STATUS_ID: "01JSTATUS00000000TODO0000"
 };
 
+const DONE_STATUS_ID = '01JSTATUS00000000DONE0000';
+
 function minutesToAmountAndUnit(minutes) {
     if (minutes == null || minutes <= 0) return { amount: '', unit: 'minutes' };
     if (minutes >= 60 && minutes % 60 === 0) return { amount: minutes / 60, unit: 'hours' };
@@ -45,6 +47,7 @@ const registerGraph = () => {
         saving: false,
         saveSuccess: false,
         settingsOpen: false,
+        highlightBlockedTodos: true,
         editingSlotId: null,
         editingSlotName: '',
         newSlotName: '',
@@ -104,7 +107,8 @@ const registerGraph = () => {
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
-                            return `<div class="cy-node${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                            const mutedClass = (this.highlightBlockedTodos && data.muted) ? ' cy-node--muted' : '';
+                            return `<div class="cy-node${compactClass}${mutedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__header">
                                     <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
                                     ${slotHtml}
@@ -130,7 +134,8 @@ const registerGraph = () => {
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
-                            return `<div class="cy-node cy-node--selected${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                            const mutedClass = (this.highlightBlockedTodos && data.muted) ? ' cy-node--muted' : '';
+                            return `<div class="cy-node cy-node--selected${compactClass}${mutedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__header">
                                     <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
                                     ${slotHtml}
@@ -203,11 +208,28 @@ const registerGraph = () => {
                 if (!response.ok) throw new Error('Failed to fetch graph');
                 const data = await response.json();
 
+                const parentIdsById = {};
+                data.edges.forEach(e => {
+                    if (!parentIdsById[e.child_id]) parentIdsById[e.child_id] = [];
+                    parentIdsById[e.child_id].push(e.parent_id);
+                });
+                const statusById = {};
+                data.nodes.forEach(n => { statusById[n.id] = n.status_id ?? DEFAULTS.STATUS_ID; });
+                const isRoot = (id) => !data.edges.some(e => e.child_id === id);
+                const isDone = (id) => (statusById[id] || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
+                const hasBlockingParent = (id) => {
+                    const pids = parentIdsById[id] || [];
+                    return pids.some(pid => !isRoot(pid) && !isDone(pid));
+                };
+
                 const elements = [
                     ...data.nodes.map(n => {
                         const type = this.nodeTypes.find(t => t.id === n.node_type_id);
                         const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         const slot = this.projectSlots.find(s => s.id === (n.slot_id || ''));
+                        const root = isRoot(n.id);
+                        const done = isDone(n.id);
+                        const muted = !root && !done && hasBlockingParent(n.id);
                         return {
                             group: 'nodes',
                             data: {
@@ -221,7 +243,8 @@ const registerGraph = () => {
                                 status_name: status ? status.name : 'To do',
                                 slot_id: n.slot_id ?? '',
                                 slot_name: slot ? slot.name : '',
-                                estimated_minutes: n.estimated_minutes ?? null
+                                estimated_minutes: n.estimated_minutes ?? null,
+                                muted: !!muted
                             }
                         };
                     }),
@@ -235,6 +258,46 @@ const registerGraph = () => {
                 console.error('Fetch error:', error);
                 alert('Could not load graph data.');
             }
+        },
+
+        recomputeMutedForGraph() {
+            const cy = this.cy;
+            const parentIdsById = {};
+            cy.edges().forEach(edge => {
+                const childId = edge.target().id();
+                const parentId = edge.source().id();
+                if (!parentIdsById[childId]) parentIdsById[childId] = [];
+                parentIdsById[childId].push(parentId);
+            });
+            const statusById = {};
+            cy.nodes().forEach(node => { statusById[node.id()] = node.data('status_id') || DEFAULTS.STATUS_ID; });
+            const isRoot = (id) => !cy.edges().some(e => e.target().id() === id);
+            const isDone = (id) => (statusById[id] || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
+            const hasBlockingParent = (id) => {
+                const pids = parentIdsById[id] || [];
+                return pids.some(pid => !isRoot(pid) && !isDone(pid));
+            };
+            cy.nodes().forEach(node => {
+                const id = node.id();
+                const root = isRoot(id);
+                const done = isDone(id);
+                const muted = !root && !done && hasBlockingParent(id);
+                node.data('muted', !!muted);
+            });
+            try {
+                const nh = cy.nodeHtmlLabel && cy.nodeHtmlLabel();
+                if (nh && typeof nh.update === 'function') nh.update();
+            } catch (_) {}
+        },
+
+        refreshNodeLabels() {
+            try {
+                const cy = this.cy;
+                if (cy && cy.nodeHtmlLabel) {
+                    const nh = cy.nodeHtmlLabel();
+                    if (nh && typeof nh.update === 'function') nh.update();
+                }
+            } catch (_) {}
         },
 
         async fetchNodeTypes() {
@@ -311,7 +374,8 @@ const registerGraph = () => {
                         node_type_color: type ? type.color : '#4F46E5',
                         slot_id: node.slot_id ?? '',
                         slot_name: slot ? slot.name : '',
-                        estimated_minutes: node.estimated_minutes ?? null
+                        estimated_minutes: node.estimated_minutes ?? null,
+                        muted: false
                     }
                 });
                 this.runLayout();
@@ -341,6 +405,11 @@ const registerGraph = () => {
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
+                const parentNode = this.cy.$id(parentId);
+                const isParentRoot = parentNode.incomers().length === 0;
+                const parentDone = (parentNode.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
+                const newNodeDone = (node.status_id ?? DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
+                const muted = !newNodeDone && !isParentRoot && !parentDone;
                 this.cy.add([
                     {
                         group: 'nodes',
@@ -355,7 +424,8 @@ const registerGraph = () => {
                             status_name: status ? status.name : 'To do',
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
-                            estimated_minutes: node.estimated_minutes ?? null
+                            estimated_minutes: node.estimated_minutes ?? null,
+                            muted: !!muted
                         }
                     },
                     { group: 'edges', data: { source: parentId, target: node.id } }
@@ -401,7 +471,8 @@ const registerGraph = () => {
                             status_name: status ? status.name : 'To do',
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
-                            estimated_minutes: node.estimated_minutes ?? null
+                            estimated_minutes: node.estimated_minutes ?? null,
+                            muted: false
                         }
                     },
                     { group: 'edges', data: { source: node.id, target: childId } }
@@ -426,6 +497,7 @@ const registerGraph = () => {
 
                 this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
                 this.runLayout();
+                this.recomputeMutedForGraph();
             } catch (error) {
                 alert(`Error connecting nodes: ${error.message}`);
             }
@@ -446,6 +518,7 @@ const registerGraph = () => {
 
                 this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
                 this.runLayout();
+                this.recomputeMutedForGraph();
             } catch (error) {
                 alert(`Error disconnecting nodes: ${error.message}`);
             }
@@ -514,6 +587,7 @@ const registerGraph = () => {
                 cyNode.data('slot_name', slot ? slot.name : '');
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
+                this.recomputeMutedForGraph();
                 this.saveSuccess = true;
                 setTimeout(() => {
                     this.saveSuccess = false;

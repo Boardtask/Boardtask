@@ -56,6 +56,30 @@ where
     Ok(())
 }
 
+/// Count nodes in a project.
+pub async fn count_by_project(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM nodes WHERE project_id = ?")
+        .bind(project_id)
+        .fetch_one(pool)
+        .await
+}
+
+/// Count nodes in a project with the given status_id.
+pub async fn count_by_project_and_status(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+    status_id: &str,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM nodes WHERE project_id = ? AND status_id = ?")
+        .bind(project_id)
+        .bind(status_id)
+        .fetch_one(pool)
+        .await
+}
+
 /// Find all nodes for a project.
 pub async fn find_by_project(
     pool: &sqlx::SqlitePool,

@@ -20,6 +20,10 @@ use crate::app::{
 pub struct ProjectShowTemplate {
     pub app_name: &'static str,
     pub project: db::projects::Project,
+    pub todo_count: i64,
+    pub in_progress_count: i64,
+    pub completed_count: i64,
+    pub total_count: i64,
 }
 
 /// GET /app/projects/:id — Show project detail.
@@ -42,9 +46,48 @@ pub async fn show(
         return (StatusCode::NOT_FOUND, "Project not found").into_response();
     }
 
+    let total_count = match db::nodes::count_by_project(&state.db, &id).await {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    };
+    let todo_count = match db::nodes::count_by_project_and_status(
+        &state.db,
+        &id,
+        db::task_statuses::TODO_STATUS_ID,
+    )
+    .await
+    {
+        Ok(c) => c,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    };
+    let in_progress_count = match db::nodes::count_by_project_and_status(
+        &state.db,
+        &id,
+        db::task_statuses::IN_PROGRESS_STATUS_ID,
+    )
+    .await
+    {
+        Ok(c) => c,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    };
+    let completed_count = match db::nodes::count_by_project_and_status(
+        &state.db,
+        &id,
+        db::task_statuses::DONE_STATUS_ID,
+    )
+    .await
+    {
+        Ok(c) => c,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    };
+
     ProjectShowTemplate {
         app_name: APP_NAME,
         project,
+        todo_count,
+        in_progress_count,
+        completed_count,
+        total_count,
     }
     .into_response()
 }

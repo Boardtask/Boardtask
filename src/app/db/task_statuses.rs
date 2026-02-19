@@ -1,6 +1,13 @@
 use sqlx::FromRow;
 use time::OffsetDateTime;
 
+/// System "To do" status ID (must match migration INSERT).
+pub const TODO_STATUS_ID: &str = "01JSTATUS00000000TODO0000";
+/// System "In progress" status ID (must match migration INSERT).
+pub const IN_PROGRESS_STATUS_ID: &str = "01JSTATUS00000000INPROG00";
+/// System "Done" status ID (must match migration INSERT).
+pub const DONE_STATUS_ID: &str = "01JSTATUS00000000DONE0000";
+
 /// Database row for task_statuses table.
 #[derive(Debug, FromRow, serde::Serialize)]
 pub struct TaskStatus {
