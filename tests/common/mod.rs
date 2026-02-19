@@ -50,6 +50,19 @@ pub fn forgot_password_form_body(email: &str) -> String {
     format!("email={}", urlencoding::encode(email))
 }
 
+pub fn change_password_form_body(
+    current_password: &str,
+    new_password: &str,
+    confirm_password: &str,
+) -> String {
+    format!(
+        "current_password={}&new_password={}&confirm_password={}",
+        urlencoding::encode(current_password),
+        urlencoding::encode(new_password),
+        urlencoding::encode(confirm_password)
+    )
+}
+
 pub fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
     set_cookie_header.split(';').next()?.strip_prefix("session_id=")
 }

@@ -1,0 +1,38 @@
+---
+description: Run validation before any DB or side effects in write handlers
+globs: src/app/**/*.rs
+alwaysApply: false
+---
+
+# Validation First in Write Handlers
+
+For handlers that perform **write operations** (e.g. change password, create project, update resource), **validation must be the first thing** in the handler.
+
+- Validate form/input (length, format, must_match, etc.) and domain rules (e.g. password strength) **before** any database reads or writes.
+- If validation fails, return early. No point doing a DB query when the request is invalid.
+- Only after all validations pass: load entities, verify permissions, then perform the write.
+
+**Example (change password):**
+
+```rust
+// 1. Validate first (no DB)
+if form.validate().is_err() {
+    return error_redirect("...").into_response();
+}
+let new_password = match Password::new(form.new_password) {
+    Ok(p) => p,
+    Err(e) => return error_redirect(&msg).into_response(),
+};
+
+// 2. Then load and verify (DB)
+let user = db::users::find_by_id(&state.db, &user_id).await?;
+let stored_hash = HashedPassword::from_string(user.password_hash);
+if stored_hash.verify(&Password::for_verification(form.current_password)).is_err() {
+    return error_redirect("Current password is wrong.").into_response();
+}
+
+// 3. Then write
+db::users::update_password(&state.db, &user_id, &password_hash).await?;
+```
+
+Apply the same pattern to other write handlers (signup, create project, reset password, etc.).

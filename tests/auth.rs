@@ -514,4 +514,221 @@ mod auth {
             );
         }
     }
+
+    mod account {
+        use crate::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+
+        #[tokio::test]
+        async fn account_page_requires_authentication() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/app/account")
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/login")
+            );
+        }
+
+        #[tokio::test]
+        async fn account_page_renders_with_email_and_form() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "account@example.com", "Password123").await;
+
+            let request = http::Request::builder()
+                .method("GET")
+                .uri("/app/account")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("account@example.com"),
+                "Expected user email in account page, got: {}",
+                body_str
+            );
+            assert!(
+                body_str.contains("Change password"),
+                "Expected change password form in account page, got: {}",
+                body_str
+            );
+        }
+
+        #[tokio::test]
+        async fn change_password_requires_authentication() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let body = change_password_form_body("Password123", "NewPassword123", "NewPassword123");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/change-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/login")
+            );
+        }
+
+        #[tokio::test]
+        async fn change_password_wrong_current_redirects_with_error() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "wrong-current@example.com", "Password123").await;
+
+            let body = change_password_form_body("WrongPassword", "NewPassword123", "NewPassword123");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/change-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/app/account?error="),
+                "Expected redirect to account with error, got: {}",
+                location
+            );
+        }
+
+        #[tokio::test]
+        async fn change_password_weak_new_password_redirects_with_error() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "weak-new@example.com", "Password123").await;
+
+            let body = change_password_form_body("Password123", "weak", "weak");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/change-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/app/account?error="),
+                "Expected redirect with validation error, got: {}",
+                location
+            );
+        }
+
+        #[tokio::test]
+        async fn change_password_mismatch_redirects_with_error() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "mismatch@example.com", "Password123").await;
+
+            let body = change_password_form_body("Password123", "NewPassword123", "OtherPass456");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/change-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/app/account?error="),
+                "Expected redirect with mismatch error, got: {}",
+                location
+            );
+        }
+
+        #[tokio::test]
+        async fn change_password_success_redirects_and_new_password_works() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "success@example.com", "Password123").await;
+
+            let body = change_password_form_body("Password123", "NewPassword123", "NewPassword123");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/change-password")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.contains("success=password_changed"),
+                "Expected redirect with success, got: {}",
+                location
+            );
+
+            // Login with new password should succeed
+            let login_body = login_form_body("success@example.com", "NewPassword123");
+            let login_request = http::Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(login_body))
+                .unwrap();
+            let login_response = app.oneshot(login_request).await.unwrap();
+
+            assert_eq!(login_response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                login_response
+                    .headers()
+                    .get("location")
+                    .map(|v| v.to_str().unwrap()),
+                Some("/app")
+            );
+        }
+    }
 }
