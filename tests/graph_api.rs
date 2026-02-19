@@ -138,12 +138,22 @@ async fn post_node_404_for_nonexistent_project() {
         .body(axum::body::Body::from(request_body.to_string()))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
 
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["error"], "Project not found");
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", nonexistent_project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(serde_json::json!({ "name": "FE 1" }).to_string()))
+        .unwrap();
+    let slot_res = app.oneshot(post_slot_req).await.unwrap();
+    assert_eq!(slot_res.status(), http::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -277,6 +287,162 @@ async fn post_node_invalid_status_id_returns_error() {
 }
 
 #[tokio::test]
+async fn post_node_with_slot_id_succeeds() {
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, "nodeslot@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(serde_json::json!({ "name": "FE 1" }).to_string()))
+        .unwrap();
+    let post_slot_res = app.clone().oneshot(post_slot_req).await.unwrap();
+    assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+    let slot_body: serde_json::Value = serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let slot_id = slot_body["id"].as_str().unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Node with slot",
+        "slot_id": slot_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::CREATED);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["slot_id"], slot_id);
+}
+
+#[tokio::test]
+async fn post_node_invalid_slot_id_returns_error() {
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, "invslot@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "slot_id": "nonexistent-slot-id"
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid slot_id");
+}
+
+#[tokio::test]
+async fn post_node_slot_id_from_other_project_returns_error() {
+    let pool = test_pool().await;
+    let app = test_router(pool.clone());
+    ensure_graph_seeds(&pool).await;
+
+    let cookie = authenticated_cookie(&pool, &app, "otherslot@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let project_id = ulid::Ulid::new().to_string();
+    let project = db::NewProject {
+        id: project_id.clone(),
+        title: "Test Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+    let other_project_id = ulid::Ulid::new().to_string();
+    let other_project = db::NewProject {
+        id: other_project_id.clone(),
+        title: "Other Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &other_project).await.unwrap();
+
+    let slot_id = ulid::Ulid::new().to_string();
+    let slot = db::project_slots::NewProjectSlot {
+        id: slot_id.clone(),
+        project_id: other_project_id.clone(),
+        name: "FE 1".to_string(),
+        sort_order: 0,
+    };
+    boardtask::app::db::project_slots::insert(&pool, &slot).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "slot_id": slot_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid slot_id");
+}
+
+#[tokio::test]
 async fn post_node_with_status_then_patch_and_get_graph() {
     let pool = test_pool().await;
     let app = test_router(pool.clone());
@@ -394,6 +560,7 @@ mod patch_node {
             title: "Node With Estimate".to_string(),
             description: None,
             estimated_minutes: Some(30),
+            slot_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
 
@@ -436,6 +603,207 @@ mod patch_node {
             updated["estimated_minutes"].is_null(),
             "Graph should return node with null estimated_minutes after clear"
         );
+    }
+
+    #[tokio::test]
+    async fn patch_node_set_slot_id_then_clear() {
+        let pool = test_pool().await;
+        let app = test_router(pool.clone());
+        ensure_graph_seeds(&pool).await;
+
+        let cookie = authenticated_cookie(&pool, &app, "patchslot@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user = boardtask::app::db::users::find_by_id(
+            &pool,
+            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let org_id = user.organization_id.clone();
+
+        let project_id = ulid::Ulid::new().to_string();
+        let project = db::NewProject {
+            id: project_id.clone(),
+            title: "Slot Patch Project".to_string(),
+            user_id: user_id.clone(),
+            organization_id: org_id.clone(),
+        };
+        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+        let post_slot_req = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/slots", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(serde_json::json!({ "name": "BE 1" }).to_string()))
+            .unwrap();
+        let post_slot_res = app.clone().oneshot(post_slot_req).await.unwrap();
+        assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+        let slot_body: serde_json::Value = serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let slot_id = slot_body["id"].as_str().unwrap().to_string();
+
+        let patch_slot_req = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/slots/{}", project_id, slot_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(serde_json::json!({ "name": "Back-end Developer 1" }).to_string()))
+            .unwrap();
+        let patch_slot_res = app.clone().oneshot(patch_slot_req).await.unwrap();
+        assert_eq!(patch_slot_res.status(), http::StatusCode::OK);
+        let patch_slot_body: serde_json::Value = serde_json::from_slice(&patch_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(patch_slot_body["name"], "Back-end Developer 1");
+
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        let patch_body = serde_json::json!({ "slot_id": slot_id });
+        let patch_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let patch_response = app.clone().oneshot(patch_request).await.unwrap();
+        assert_eq!(patch_response.status(), http::StatusCode::OK);
+
+        let patch_res_bytes = patch_response.into_body().collect().await.unwrap().to_bytes();
+        let patch_res: serde_json::Value = serde_json::from_slice(&patch_res_bytes).unwrap();
+        assert_eq!(patch_res["slot_id"], slot_id);
+
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.clone().oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let get_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
+        let nodes = graph["nodes"].as_array().unwrap();
+        let updated_node = nodes.iter().find(|n| n["id"] == node_id).unwrap();
+        assert_eq!(updated_node["slot_id"], slot_id);
+
+        let clear_body = serde_json::json!({ "slot_id": null });
+        let clear_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(clear_body.to_string()))
+            .unwrap();
+
+        let clear_response = app.clone().oneshot(clear_request).await.unwrap();
+        assert_eq!(clear_response.status(), http::StatusCode::OK);
+
+        let clear_res_bytes = clear_response.into_body().collect().await.unwrap().to_bytes();
+        let clear_res: serde_json::Value = serde_json::from_slice(&clear_res_bytes).unwrap();
+        assert!(clear_res["slot_id"].is_null());
+
+        let get_request2 = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response2 = app.clone().oneshot(get_request2).await.unwrap();
+        let get_bytes2 = get_response2.into_body().collect().await.unwrap().to_bytes();
+        let graph2: serde_json::Value = serde_json::from_slice(&get_bytes2).unwrap();
+        let nodes2 = graph2["nodes"].as_array().unwrap();
+        let cleared_node = nodes2.iter().find(|n| n["id"] == node_id).unwrap();
+        assert!(cleared_node["slot_id"].is_null());
+
+        // Re-assign slot then DELETE slot; node's slot_id should be cleared
+        let set_slot_req = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(serde_json::json!({ "slot_id": slot_id }).to_string()))
+            .unwrap();
+        let _ = app.clone().oneshot(set_slot_req).await.unwrap();
+
+        let delete_slot_req = http::Request::builder()
+            .method("DELETE")
+            .uri(&format!("/api/projects/{}/slots/{}", project_id, slot_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let delete_slot_res = app.clone().oneshot(delete_slot_req).await.unwrap();
+        assert_eq!(delete_slot_res.status(), http::StatusCode::NO_CONTENT);
+
+        let node_after = boardtask::app::db::nodes::find_by_id(&pool, &node_id).await.unwrap().unwrap();
+        assert!(node_after.slot_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn patch_node_invalid_slot_id_returns_400() {
+        let pool = test_pool().await;
+        let app = test_router(pool.clone());
+        ensure_graph_seeds(&pool).await;
+
+        let cookie = authenticated_cookie(&pool, &app, "patchinvslot@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user = boardtask::app::db::users::find_by_id(
+            &pool,
+            &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let org_id = user.organization_id.clone();
+
+        let project_id = ulid::Ulid::new().to_string();
+        let project = db::NewProject {
+            id: project_id.clone(),
+            title: "Test Project".to_string(),
+            user_id: user_id.clone(),
+            organization_id: org_id.clone(),
+        };
+        boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
+
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        let patch_body = serde_json::json!({ "slot_id": "invalid-slot-id" });
+        let request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["error"], "Invalid slot_id");
     }
 }
 
@@ -500,6 +868,7 @@ async fn post_edge_succeeds() {
         title: "Parent Node".to_string(),
         description: None,
         estimated_minutes: None,
+        slot_id: None,
     };
     let child_node = db::nodes::NewNode {
         id: child_node_id.clone(),
@@ -509,6 +878,7 @@ async fn post_edge_succeeds() {
         title: "Child Node".to_string(),
         description: None,
         estimated_minutes: None,
+        slot_id: None,
     };
 
     boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
@@ -569,6 +939,7 @@ async fn post_edge_404_when_node_not_in_project() {
         title: "Project Node".to_string(),
         description: None,
         estimated_minutes: None,
+        slot_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
 
@@ -591,6 +962,7 @@ async fn post_edge_404_when_node_not_in_project() {
         title: "Other Node".to_string(),
         description: None,
         estimated_minutes: None,
+        slot_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
 
@@ -631,12 +1003,20 @@ mod get_graph {
             .body(axum::body::Body::empty())
             .unwrap();
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
 
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(body["error"], "Unauthorized");
+
+        let slots_request = http::Request::builder()
+            .method("GET")
+            .uri("/api/projects/123/slots")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let slots_response = app.oneshot(slots_request).await.unwrap();
+        assert_eq!(slots_response.status(), http::StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -660,6 +1040,52 @@ mod get_graph {
         };
         boardtask::app::db::projects::insert(&pool, &project).await.unwrap();
 
+        // GET slots (empty), POST slot, GET slots, POST duplicate name → 400
+        let get_slots_req = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/slots", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_slots_res = app.clone().oneshot(get_slots_req).await.unwrap();
+        assert_eq!(get_slots_res.status(), http::StatusCode::OK);
+        let slots_body: serde_json::Value = serde_json::from_slice(&get_slots_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert!(slots_body["slots"].as_array().unwrap().is_empty());
+
+        let post_slot_body = serde_json::json!({ "name": "Front-end Developer 1", "sort_order": 0 });
+        let post_slot_req = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/slots", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(post_slot_body.to_string()))
+            .unwrap();
+        let post_slot_res = app.clone().oneshot(post_slot_req).await.unwrap();
+        assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+        let created_slot: serde_json::Value = serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(created_slot["name"], "Front-end Developer 1");
+        assert_eq!(created_slot["project_id"], project_id);
+
+        let get_slots_req2 = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/slots", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_slots_res2 = app.clone().oneshot(get_slots_req2).await.unwrap();
+        let slots_body2: serde_json::Value = serde_json::from_slice(&get_slots_res2.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(slots_body2["slots"].as_array().unwrap().len(), 1);
+
+        let post_dup_req = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/slots", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(serde_json::json!({ "name": "Front-end Developer 1" }).to_string()))
+            .unwrap();
+        let post_dup_res = app.clone().oneshot(post_dup_req).await.unwrap();
+        assert_eq!(post_dup_res.status(), http::StatusCode::BAD_REQUEST);
+
         // Create nodes in the project
         let node1_id = ulid::Ulid::new().to_string();
         let node1 = db::nodes::NewNode {
@@ -670,6 +1096,7 @@ mod get_graph {
             title: "Node 1".to_string(),
             description: Some("First node".to_string()),
             estimated_minutes: None,
+            slot_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
 
@@ -682,6 +1109,7 @@ mod get_graph {
             title: "Node 2".to_string(),
             description: None,
             estimated_minutes: None,
+            slot_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();
 

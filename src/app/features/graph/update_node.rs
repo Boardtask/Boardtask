@@ -37,6 +37,9 @@ pub struct UpdateNodeRequest {
     pub description: Option<String>,
     pub node_type_id: Option<String>,
     pub status_id: Option<String>,
+    /// Omit = unchanged, null = clear slot.
+    #[serde(default, deserialize_with = "deserialize_optional_option")]
+    pub slot_id: Option<Option<String>>,
     /// Omit = unchanged, null = clear estimate.
     #[serde(default, deserialize_with = "deserialize_optional_option")]
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
@@ -55,14 +58,17 @@ pub struct NodeResponse {
     pub created_at: i64,
     pub updated_at: Option<i64>,
     pub estimated_minutes: Option<i64>,
+    pub slot_id: Option<String>,
 }
 
-/// Validates update-node request (sync rules + DB-backed node_type_id and status_id when provided).
+/// Validates update-node request (sync rules + DB-backed node_type_id, status_id, slot_id when provided).
 async fn validate_update_node_request(
     request: &UpdateNodeRequest,
     pool: &sqlx::SqlitePool,
     merged_node_type_id: &str,
     merged_status_id: &str,
+    _merged_slot_id: &Option<String>,
+    project_id: &str,
 ) -> Result<(), AppError> {
     request
         .validate()
@@ -77,6 +83,14 @@ async fn validate_update_node_request(
         let _ = db::task_statuses::find_by_id(pool, merged_status_id)
             .await?
             .ok_or_else(|| AppError::Validation("Invalid status_id".to_string()))?;
+    }
+    if let Some(Some(slot_id)) = &request.slot_id {
+        let slot = db::project_slots::find_by_id(pool, slot_id)
+            .await?
+            .ok_or_else(|| AppError::Validation("Invalid slot_id".to_string()))?;
+        if slot.project_id != project_id {
+            return Err(AppError::Validation("Invalid slot_id".to_string()));
+        }
     }
 
     Ok(())
@@ -102,7 +116,19 @@ pub async fn update_node(
 
     let node_type_id = request.node_type_id.as_deref().unwrap_or(&node.node_type_id);
     let status_id = request.status_id.as_deref().unwrap_or(&node.status_id);
-    validate_update_node_request(&request, &state.db, node_type_id, status_id).await?;
+    let slot_id = request
+        .slot_id
+        .clone()
+        .unwrap_or_else(|| node.slot_id.clone());
+    validate_update_node_request(
+        &request,
+        &state.db,
+        node_type_id,
+        status_id,
+        &slot_id,
+        &params.project_id,
+    )
+    .await?;
 
     let title = request.title.as_deref().unwrap_or(&node.title);
     let description = request.description.or(node.description);
@@ -117,6 +143,7 @@ pub async fn update_node(
         node_type_id,
         status_id,
         estimated_minutes,
+        slot_id.as_deref(),
     )
     .await?;
 
@@ -135,6 +162,7 @@ pub async fn update_node(
         created_at: updated_node.created_at,
         updated_at: updated_node.updated_at,
         estimated_minutes: updated_node.estimated_minutes,
+        slot_id: updated_node.slot_id,
     };
 
     Ok((StatusCode::OK, Json(response)))

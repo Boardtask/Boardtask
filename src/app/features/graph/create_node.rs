@@ -24,6 +24,7 @@ pub struct CreateNodeRequest {
     #[validate(length(max = 2000))]
     pub description: Option<String>,
     pub status_id: Option<String>,
+    pub slot_id: Option<String>,
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
     pub estimated_minutes: Option<i64>,
 }
@@ -40,13 +41,15 @@ pub struct NodeResponse {
     pub created_at: i64,
     pub updated_at: Option<i64>,
     pub estimated_minutes: Option<i64>,
+    pub slot_id: Option<String>,
 }
 
-/// Validates create-node request (sync rules + DB-backed node_type_id and status_id). Returns (node_type_id, status_id).
+/// Validates create-node request (sync rules + DB-backed node_type_id, status_id, slot_id). Returns (node_type_id, status_id, slot_id).
 async fn validate_create_node_request(
     request: &CreateNodeRequest,
     pool: &sqlx::SqlitePool,
-) -> Result<(String, String), AppError> {
+    project_id: &str,
+) -> Result<(String, String, Option<String>), AppError> {
     request
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
@@ -65,7 +68,20 @@ async fn validate_create_node_request(
         }
     };
 
-    Ok((request.node_type_id.clone(), status_id))
+    let slot_id = match &request.slot_id {
+        None => None,
+        Some(s) => {
+            let slot = db::project_slots::find_by_id(pool, s)
+                .await?
+                .ok_or_else(|| AppError::Validation("Invalid slot_id".to_string()))?;
+            if slot.project_id != project_id {
+                return Err(AppError::Validation("Invalid slot_id".to_string()));
+            }
+            Some(s.clone())
+        }
+    };
+
+    Ok((request.node_type_id.clone(), status_id, slot_id))
 }
 
 /// POST /api/projects/:project_id/nodes — Create a new node.
@@ -78,7 +94,7 @@ pub async fn create_node(
     // Validate org membership on every write
     let project = super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
 
-    let (node_type_id, status_id) = validate_create_node_request(&request, &state.db).await?;
+    let (node_type_id, status_id, slot_id) = validate_create_node_request(&request, &state.db, &project_id).await?;
 
     // Generate ULID for node
     let node_id = Ulid::new().to_string();
@@ -92,6 +108,7 @@ pub async fn create_node(
         title: request.title,
         description: request.description,
         estimated_minutes: request.estimated_minutes,
+        slot_id,
     };
 
     db::nodes::insert(&state.db, &new_node).await?;
@@ -111,6 +128,7 @@ pub async fn create_node(
         created_at: node.created_at,
         updated_at: node.updated_at,
         estimated_minutes: node.estimated_minutes,
+        slot_id: node.slot_id,
     };
 
     Ok((StatusCode::CREATED, Json(response)))

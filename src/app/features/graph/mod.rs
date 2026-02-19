@@ -10,5 +10,6 @@ pub mod helpers;
 pub mod types;
 pub mod get_node_types;
 pub mod get_task_statuses;
+pub mod slots;
 
 pub use defaults::sync_system_node_types;
