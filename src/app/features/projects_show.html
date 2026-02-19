@@ -4,13 +4,19 @@
 
 {% block content %}
 <div class="w-full h-screen flex flex-col pt-8 px-6">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold">{{ project.title }}</h1>
-        <a href="/app/projects" class="text-blue-600 hover:text-blue-500">Back to projects</a>
-    </div>
-
     <div x-data="graph('{{ project.id }}')"
         class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+        <div class="flex justify-between items-center mb-6 px-6 pt-2">
+            <h1 class="text-2xl font-bold">{{ project.title }}</h1>
+            <div class="flex items-center gap-3">
+                <button type="button" @click="openSettings()"
+                    class="p-2 rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition"
+                    aria-label="Project settings">
+                    <span class="material-symbols-outlined">settings</span>
+                </button>
+                <a href="/app/projects" class="text-blue-600 hover:text-blue-500">Back to projects</a>
+            </div>
+        </div>
         <!-- Controls -->
         <div class="p-4 bg-white border-b border-gray-200 flex flex-wrap gap-3">
             <button @click="addNode()"
@@ -165,6 +171,84 @@
                     <button @click="closeEditPanel()"
                         class="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md hover:bg-gray-50 transition duration-200">
                         Cancel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Settings Drawer -->
+            <div class="side-drawer" :class="{ 'side-drawer--open': settingsOpen }">
+                <div class="side-drawer__header">
+                    <h3>Project settings</h3>
+                    <button @click="closeSettings()" class="side-drawer__close" aria-label="Close settings">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="side-drawer__content">
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-700">Slots</h4>
+
+                        <ul class="space-y-2">
+                            <template x-for="slot in projectSlots" :key="slot.id">
+                                <li class="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+                                    <template x-if="editingSlotId !== slot.id">
+                                        <div class="flex-1 min-w-0 flex items-center gap-2">
+                                            <span class="truncate" x-text="slot.name"></span>
+                                            <button type="button" @click="startEditSlot(slot)"
+                                                class="p-1.5 rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700 shrink-0"
+                                                aria-label="Edit slot">
+                                                <span class="material-symbols-outlined text-lg">edit</span>
+                                            </button>
+                                            <button type="button" @click="deleteSlot(slot.id)"
+                                                class="p-1.5 rounded text-gray-500 hover:bg-red-100 hover:text-red-600 shrink-0"
+                                                aria-label="Delete slot">
+                                                <span class="material-symbols-outlined text-lg">delete</span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <template x-if="editingSlotId === slot.id">
+                                        <div class="flex-1 min-w-0 flex items-center gap-2">
+                                            <input type="text" x-model="editingSlotName"
+                                                @keydown.enter="saveEditSlot()"
+                                                @keydown.escape="cancelEditSlot()"
+                                                class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded text-sm">
+                                            <button type="button" @click="saveEditSlot()"
+                                                class="px-2 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Save</button>
+                                            <button type="button" @click="cancelEditSlot()"
+                                                class="px-2 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">Cancel</button>
+                                        </div>
+                                    </template>
+                                </li>
+                            </template>
+                        </ul>
+
+                        <div class="pt-2">
+                            <p class="text-xs text-gray-500 mb-2">Add a new slot</p>
+                            <div class="flex gap-2 flex-wrap items-end">
+                                <div class="min-w-0 flex-1">
+                                    <label for="new-slot-name" class="sr-only">Slot name</label>
+                                    <input id="new-slot-name" type="text" x-model="newSlotName"
+                                        placeholder="Slot name"
+                                        @keydown.enter="addSlot()"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                </div>
+                                <button type="button" @click="addSlot()"
+                                    class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
+                                    Add slot
+                                </button>
+                            </div>
+                            <p x-show="slotError" x-text="slotError" class="mt-1 text-sm text-red-600"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="side-drawer__footer">
+                    <button @click="closeSettings()"
+                        class="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md hover:bg-gray-50 transition duration-200">
+                        Done
                     </button>
                 </div>
             </div>

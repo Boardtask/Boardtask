@@ -44,6 +44,11 @@ const registerGraph = () => {
         editingNode: null, // { id, title, description, node_type_id, status_id, slot_id, estimated_amount, estimated_unit }
         saving: false,
         saveSuccess: false,
+        settingsOpen: false,
+        editingSlotId: null,
+        editingSlotName: '',
+        newSlotName: '',
+        slotError: '',
 
         async init() {
             this.cy = cytoscape({
@@ -137,6 +142,8 @@ const registerGraph = () => {
             }
 
             this.cy.on('select', 'node', (evt) => {
+                this.settingsOpen = false;
+
                 const node = evt.target;
                 const id = node.id();
 
@@ -519,6 +526,88 @@ const registerGraph = () => {
         closeEditPanel() {
             if (this.editingNode) {
                 this.cy.$id(this.editingNode.id).unselect();
+            }
+        },
+
+        openSettings() {
+            this.settingsOpen = true;
+            this.editingNode = null;
+            this.selectedNodeIds = [];
+            if (this.cy) {
+                this.cy.nodes().unselect();
+            }
+            this.editingSlotId = null;
+            this.editingSlotName = '';
+            this.newSlotName = '';
+            this.slotError = '';
+            this.fetchProjectSlots();
+        },
+
+        closeSettings() {
+            this.settingsOpen = false;
+            this.editingSlotId = null;
+            this.editingSlotName = '';
+            this.newSlotName = '';
+            this.slotError = '';
+        },
+
+        startEditSlot(slot) {
+            this.editingSlotId = slot.id;
+            this.editingSlotName = slot.name;
+        },
+
+        cancelEditSlot() {
+            this.editingSlotId = null;
+            this.editingSlotName = '';
+        },
+
+        async saveEditSlot() {
+            if (this.editingSlotId == null) return;
+            const name = (this.editingSlotName || '').trim();
+            if (!name) {
+                this.slotError = 'Name is required';
+                return;
+            }
+            this.slotError = '';
+            try {
+                await this.updateSlot(this.editingSlotId, name);
+                this.editingSlotId = null;
+                this.editingSlotName = '';
+            } catch (e) {
+                this.slotError = e.message || 'Failed to update slot';
+            }
+        },
+
+        async addSlot() {
+            const name = (this.newSlotName || '').trim();
+            if (!name) {
+                this.slotError = 'Name is required';
+                return;
+            }
+            this.slotError = '';
+            try {
+                await this.api(`/api/projects/${this.projectId}/slots`, 'POST', { name });
+                await this.fetchProjectSlots();
+                this.newSlotName = '';
+            } catch (e) {
+                this.slotError = e.message || 'Failed to add slot';
+            }
+        },
+
+        async updateSlot(slotId, name) {
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'PATCH', { name: trimmed });
+            await this.fetchProjectSlots();
+        },
+
+        async deleteSlot(slotId) {
+            if (!confirm('Delete this slot? Nodes using it will have their slot cleared.')) return;
+            try {
+                await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'DELETE');
+                await this.fetchProjectSlots();
+            } catch (e) {
+                this.slotError = e.message || 'Failed to delete slot';
             }
         },
 
