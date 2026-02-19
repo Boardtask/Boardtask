@@ -39,6 +39,9 @@
                 <span>Progress</span>
                 <span>To do: {{ todo_count }} · Blocked: {{ blocked_count }} · In progress: {{ in_progress_count }} · Done: {{ completed_count }}</span>
             </div>
+            <div class="text-sm text-gray-600 mb-1">
+                Estimated: {{ total_estimated_display }} · Left: {{ estimated_left_display }} · Completed: {{ estimated_completed_display }}
+            </div>
             <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden flex">
                 {% if total_count > 0 %}
                 <div class="h-full bg-red-700 transition-[width] duration-300" style="width: {{ ((todo_count - blocked_todo_count) * 100 / total_count) }}%"></div>

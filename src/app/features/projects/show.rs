@@ -16,6 +16,22 @@ use crate::app::{
 
 use super::progress;
 
+fn format_estimated_minutes(minutes: i64) -> String {
+    if minutes == 0 {
+        "—".to_string()
+    } else if minutes < 60 {
+        format!("{} min", minutes)
+    } else {
+        let h = minutes / 60;
+        let m = minutes % 60;
+        if m == 0 {
+            format!("{} h", h)
+        } else {
+            format!("{} h {} min", h, m)
+        }
+    }
+}
+
 /// Project detail template.
 #[derive(Template)]
 #[template(path = "projects_show.html")]
@@ -29,6 +45,9 @@ pub struct ProjectShowTemplate {
     pub blocked_count: i64,
     pub blocked_todo_count: i64,
     pub blocked_in_progress_count: i64,
+    pub total_estimated_display: String,
+    pub estimated_left_display: String,
+    pub estimated_completed_display: String,
 }
 
 /// GET /app/projects/:id — Show project detail.
@@ -96,6 +115,18 @@ pub async fn show(
     let (blocked_count, blocked_todo_count, blocked_in_progress_count) =
         progress::count_blocked(&nodes, &edges);
 
+    let total_estimated_minutes: i64 = nodes.iter().filter_map(|n| n.estimated_minutes).sum();
+    let estimated_completed_minutes: i64 = nodes
+        .iter()
+        .filter(|n| n.status_id == db::task_statuses::DONE_STATUS_ID)
+        .filter_map(|n| n.estimated_minutes)
+        .sum();
+    let estimated_left_minutes = total_estimated_minutes.saturating_sub(estimated_completed_minutes);
+
+    let total_estimated_display = format_estimated_minutes(total_estimated_minutes);
+    let estimated_left_display = format_estimated_minutes(estimated_left_minutes);
+    let estimated_completed_display = format_estimated_minutes(estimated_completed_minutes);
+
     ProjectShowTemplate {
         app_name: APP_NAME,
         project,
@@ -106,6 +137,9 @@ pub async fn show(
         blocked_count,
         blocked_todo_count,
         blocked_in_progress_count,
+        total_estimated_display,
+        estimated_left_display,
+        estimated_completed_display,
     }
     .into_response()
 }
