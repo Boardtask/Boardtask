@@ -60,7 +60,7 @@ const registerGraph = () => {
                         selector: 'node',
                         style: {
                             'shape': 'round-rectangle',
-                            'width': 150,
+                            'width': 220,
                             'height': 80,
                             'opacity': 0,
                             'label': ''
@@ -100,16 +100,17 @@ const registerGraph = () => {
                             const statusName = data.status_name || '';
                             const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
                             const slotName = data.slot_name || '';
-                            const slotHtml = slotName ? `<div class="cy-node__slot">${slotName}</div>` : '';
+                            const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${slotName}</div>` : '';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
                             return `<div class="cy-node${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
-                                <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
+                                <div class="cy-node__header">
+                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
+                                    ${slotHtml}
+                                </div>
                                 <div class="cy-node__label">${data.label}</div>
-                                ${statusHtml}
-                                ${slotHtml}
-                                ${estimateHtml}
+                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
                             </div>`;
                         }
                     },
@@ -125,16 +126,17 @@ const registerGraph = () => {
                             const statusName = data.status_name || '';
                             const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
                             const slotName = data.slot_name || '';
-                            const slotHtml = slotName ? `<div class="cy-node__slot">${slotName}</div>` : '';
+                            const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${slotName}</div>` : '';
                             const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
                             const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
                             const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
                             return `<div class="cy-node cy-node--selected${compactClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
-                                <div class="cy-node__type" style="color: ${typeColor};">${typeName}</div>
+                                <div class="cy-node__header">
+                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
+                                    ${slotHtml}
+                                </div>
                                 <div class="cy-node__label">${data.label}</div>
-                                ${statusHtml}
-                                ${slotHtml}
-                                ${estimateHtml}
+                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
                             </div>`;
                         }
                     }
