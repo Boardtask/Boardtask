@@ -33,16 +33,17 @@
                 <a href="/app/projects" class="text-blue-600 hover:text-blue-500">Back to projects</a>
             </div>
         </div>
-        <!-- Progress (To do | In progress | Done) -->
+        <!-- Progress (To do | Blocked | In progress | Done) -->
         <div class="px-6 mb-6">
             <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
                 <span>Progress</span>
-                <span>To do: {{ todo_count }} · In progress: {{ in_progress_count }} · Done: {{ completed_count }}</span>
+                <span>To do: {{ todo_count }} · Blocked: {{ blocked_count }} · In progress: {{ in_progress_count }} · Done: {{ completed_count }}</span>
             </div>
             <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden flex">
                 {% if total_count > 0 %}
-                <div class="h-full bg-red-700 transition-[width] duration-300" style="width: {{ (todo_count * 100 / total_count) }}%"></div>
-                <div class="h-full bg-blue-700 transition-[width] duration-300" style="width: {{ (in_progress_count * 100 / total_count) }}%"></div>
+                <div class="h-full bg-red-700 transition-[width] duration-300" style="width: {{ ((todo_count - blocked_todo_count) * 100 / total_count) }}%"></div>
+                <div class="h-full bg-amber-600 transition-[width] duration-300" style="width: {{ (blocked_count * 100 / total_count) }}%"></div>
+                <div class="h-full bg-blue-700 transition-[width] duration-300" style="width: {{ ((in_progress_count - blocked_in_progress_count) * 100 / total_count) }}%"></div>
                 <div class="h-full bg-green-700 transition-[width] duration-300" style="width: {{ (completed_count * 100 / total_count) }}%"></div>
                 {% else %}
                 <div class="h-full bg-gray-300 rounded-full flex-1"></div>

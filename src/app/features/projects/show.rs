@@ -14,6 +14,8 @@ use crate::app::{
     AppState, APP_NAME,
 };
 
+use super::progress;
+
 /// Project detail template.
 #[derive(Template)]
 #[template(path = "projects_show.html")]
@@ -24,6 +26,9 @@ pub struct ProjectShowTemplate {
     pub in_progress_count: i64,
     pub completed_count: i64,
     pub total_count: i64,
+    pub blocked_count: i64,
+    pub blocked_todo_count: i64,
+    pub blocked_in_progress_count: i64,
 }
 
 /// GET /app/projects/:id — Show project detail.
@@ -81,6 +86,16 @@ pub async fn show(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
 
+    let (nodes, edges) = match tokio::try_join!(
+        db::nodes::find_by_project(&state.db, &id),
+        db::node_edges::find_by_project(&state.db, &id),
+    ) {
+        Ok((n, e)) => (n, e),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    };
+    let (blocked_count, blocked_todo_count, blocked_in_progress_count) =
+        progress::count_blocked(&nodes, &edges);
+
     ProjectShowTemplate {
         app_name: APP_NAME,
         project,
@@ -88,6 +103,9 @@ pub async fn show(
         in_progress_count,
         completed_count,
         total_count,
+        blocked_count,
+        blocked_todo_count,
+        blocked_in_progress_count,
     }
     .into_response()
 }
