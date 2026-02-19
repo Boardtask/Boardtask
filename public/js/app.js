@@ -29,6 +29,47 @@ function formatEstimatedMinutes(minutes) {
     return unit === 'hours' ? `${amount}h` : `${amount}m`;
 }
 
+/** Escape for safe use in HTML content and attribute values (prevents XSS). */
+function escapeHtml(str) {
+    if (str == null) return '';
+    const s = String(str);
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Build cytoscape node label HTML with all API/DB-derived values escaped.
+ * @param {object} data - Node data (label, node_type_name, node_type_color, status_name, slot_name, estimated_minutes, muted)
+ * @param {{ selected: boolean, muted: boolean }} opts
+ */
+function buildNodeLabelHtml(data, opts) {
+    const typeName = escapeHtml(data.node_type_name || 'Task');
+    const typeColor = escapeHtml(data.node_type_color || '#4F46E5');
+    const statusName = escapeHtml(data.status_name || '');
+    const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
+    const slotName = escapeHtml(data.slot_name || '');
+    const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName}">${slotName}</div>` : '';
+    const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
+    const estimateStr = escapeHtml(estimateStrRaw);
+    const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
+    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name) ? ' cy-node--compact' : '';
+    const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
+    const selectedClass = opts.selected ? ' cy-node--selected' : '';
+    const label = escapeHtml(data.label ?? '');
+    return `<div class="cy-node${compactClass}${mutedClass}${selectedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+                                <div class="cy-node__header">
+                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
+                                    ${slotHtml}
+                                </div>
+                                <div class="cy-node__label">${label}</div>
+                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
+                            </div>`;
+}
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -97,26 +138,10 @@ const registerGraph = () => {
                         valign: 'center',
                         halignBox: 'center',
                         valignBox: 'center',
-                        tpl: (data) => {
-                            const typeName = data.node_type_name || 'Task';
-                            const typeColor = data.node_type_color || '#4F46E5';
-                            const statusName = data.status_name || '';
-                            const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
-                            const slotName = data.slot_name || '';
-                            const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${slotName}</div>` : '';
-                            const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
-                            const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
-                            const mutedClass = (this.highlightBlockedTodos && data.muted) ? ' cy-node--muted' : '';
-                            return `<div class="cy-node${compactClass}${mutedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
-                                <div class="cy-node__header">
-                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
-                                    ${slotHtml}
-                                </div>
-                                <div class="cy-node__label">${data.label}</div>
-                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
-                            </div>`;
-                        }
+                        tpl: (data) => buildNodeLabelHtml(data, {
+                            selected: false,
+                            muted: this.highlightBlockedTodos && data.muted
+                        })
                     },
                     {
                         query: 'node:selected',
@@ -124,26 +149,10 @@ const registerGraph = () => {
                         valign: 'center',
                         halignBox: 'center',
                         valignBox: 'center',
-                        tpl: (data) => {
-                            const typeName = data.node_type_name || 'Task';
-                            const typeColor = data.node_type_color || '#4F46E5';
-                            const statusName = data.status_name || '';
-                            const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
-                            const slotName = data.slot_name || '';
-                            const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${slotName}</div>` : '';
-                            const estimateStr = formatEstimatedMinutes(data.estimated_minutes);
-                            const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-                            const compactClass = (!estimateStr && !statusName && !slotName) ? ' cy-node--compact' : '';
-                            const mutedClass = (this.highlightBlockedTodos && data.muted) ? ' cy-node--muted' : '';
-                            return `<div class="cy-node cy-node--selected${compactClass}${mutedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
-                                <div class="cy-node__header">
-                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
-                                    ${slotHtml}
-                                </div>
-                                <div class="cy-node__label">${data.label}</div>
-                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
-                            </div>`;
-                        }
+                        tpl: (data) => buildNodeLabelHtml(data, {
+                            selected: true,
+                            muted: this.highlightBlockedTodos && data.muted
+                        })
                     }
                 ]);
             }
