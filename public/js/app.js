@@ -734,7 +734,8 @@ const registerGraph = () => {
                 rankSep: 100,
                 ranker: 'tight-tree',
                 animate: true,
-                animationDuration: 500
+                animationDuration: 500,
+                fit: !!opts.fit
             });
 
             if (opts.fit) {
