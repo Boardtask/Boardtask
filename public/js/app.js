@@ -265,7 +265,7 @@ const registerGraph = () => {
 
                 this.cy.elements().remove();
                 this.cy.add(elements);
-                this.runLayout();
+                this.runLayout({ fit: true });
             } catch (error) {
                 console.error('Fetch error:', error);
                 alert('Could not load graph data.');
@@ -390,7 +390,7 @@ const registerGraph = () => {
                         muted: false
                     }
                 });
-                this.runLayout();
+                this.runLayout({ fit: true });
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
             }
@@ -726,7 +726,7 @@ const registerGraph = () => {
             }
         },
 
-        runLayout() {
+        runLayout(opts = {}) {
             const layout = this.cy.layout({
                 name: 'dagre',
                 rankDir: this.layoutDirection,
@@ -737,12 +737,14 @@ const registerGraph = () => {
                 animationDuration: 500
             });
 
-            layout.one('layoutstop', () => {
-                this.cy.animate({
-                    fit: { padding: 50 },
-                    duration: 300
+            if (opts.fit) {
+                layout.one('layoutstop', () => {
+                    this.cy.animate({
+                        fit: { padding: 50 },
+                        duration: 300
+                    });
                 });
-            });
+            }
 
             layout.run();
         }
