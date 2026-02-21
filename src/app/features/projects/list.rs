@@ -6,6 +6,7 @@ use axum::{
     routing::get,
     Router,
 };
+use time::OffsetDateTime;
 
 use crate::app::{
     db,
@@ -14,12 +15,19 @@ use crate::app::{
     AppState, APP_NAME,
 };
 
+/// One row for the projects list table (id, title, formatted created date).
+pub struct ProjectRow {
+    pub id: String,
+    pub title: String,
+    pub created_at_display: String,
+}
+
 /// Projects list template.
 #[derive(Template)]
 #[template(path = "projects_list.html")]
 pub struct ProjectsListTemplate {
     pub app_name: &'static str,
-    pub projects: Vec<db::projects::Project>,
+    pub projects: Vec<ProjectRow>,
 }
 
 /// GET /app/projects — List user's projects (scoped by org).
@@ -35,7 +43,7 @@ pub async fn list(
         return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
     }
 
-    let projects = match db::projects::find_by_user_and_org(
+    let db_projects = match db::projects::find_by_user_and_org(
         &state.db,
         &session.user_id,
         &session.organization_id,
@@ -45,6 +53,20 @@ pub async fn list(
         Ok(p) => p,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
+
+    let projects: Vec<ProjectRow> = db_projects
+        .into_iter()
+        .map(|p| {
+            let created_at_display = OffsetDateTime::from_unix_timestamp(p.created_at)
+                .map(|dt| dt.date().to_string())
+                .unwrap_or_else(|_| "—".into());
+            ProjectRow {
+                id: p.id,
+                title: p.title,
+                created_at_display,
+            }
+        })
+        .collect();
 
     ProjectsListTemplate {
         app_name: APP_NAME,
