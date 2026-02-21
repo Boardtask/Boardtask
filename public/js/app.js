@@ -47,6 +47,18 @@ function escapeHtml(str) {
  * @param {{ selected: boolean, muted: boolean }} opts
  */
 function buildNodeLabelHtml(data, opts) {
+    // Group nodes: when empty show a named box; when they have children only the :parent border is shown (no card).
+    if (typeof data.id === 'string' && data.id.startsWith('group-')) {
+        if (data.groupEmpty !== false) {
+            const label = escapeHtml(data.label ?? 'New group');
+            const selectedClass = opts.selected ? ' cy-node--selected' : '';
+            return `<div class="cy-node cy-node--compact${selectedClass}" style="border-color: #94A3B8; border-left-color: #94A3B8;">
+                                <div class="cy-node__header"><span class="cy-node__label" style="font-weight: 600;">${label}</span></div>
+                                <div class="cy-node__meta"><span class="cy-node__type text-xs" style="color: #94A3B8;">Group</span></div>
+                            </div>`;
+        }
+        return '';
+    }
     const typeName = escapeHtml(data.node_type_name || 'Task');
     const typeColor = escapeHtml(data.node_type_color || '#4F46E5');
     const statusName = escapeHtml(data.status_name || '');
@@ -94,6 +106,7 @@ const registerGraph = () => {
         editingSlotName: '',
         newSlotName: '',
         slotError: '',
+        groupListVersion: 0,
 
         async init() {
             this.cy = cytoscape({
@@ -119,6 +132,24 @@ const registerGraph = () => {
                             'target-arrow-color': '#C7D2FE',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier'
+                        }
+                    },
+                    {
+                        selector: ':parent',
+                        style: {
+                            'shape': 'rectangle',
+                            'background-color': '#F1F5F9',
+                            'border-width': 2,
+                            'border-color': '#94A3B8',
+                            'padding': 20,
+                            'border-opacity': 0.8,
+                            'opacity': 1
+                        }
+                    },
+                    {
+                        selector: 'node[id^="group-"]',
+                        style: {
+                            'opacity': 1
                         }
                     }
                 ],
@@ -166,6 +197,21 @@ const registerGraph = () => {
 
                 if (!this.selectedNodeIds.includes(id)) {
                     this.selectedNodeIds.push(id);
+                }
+
+                // Group nodes (UI-only): open edit panel with name-only (isGroup: true)
+                if (typeof id === 'string' && id.startsWith('group-')) {
+                    if (this.selectedNodeIds.length > 2) {
+                        const firstId = this.selectedNodeIds.shift();
+                        this.cy.$id(firstId).unselect();
+                    }
+                    this.editingNode = {
+                        id,
+                        title: node.data('label') ?? 'New group',
+                        isGroup: true
+                    };
+                    this.refreshNodeLabels();
+                    return;
                 }
 
                 // Set editing node when a single node is selected or is the last selected
@@ -396,6 +442,72 @@ const registerGraph = () => {
             }
         },
 
+        createGroup() {
+            const id = 'group-' + Date.now();
+            this.cy.add({
+                group: 'nodes',
+                data: {
+                    id,
+                    label: 'New group',
+                    groupEmpty: true,
+                    node_type_name: 'Group',
+                    node_type_color: '#94A3B8',
+                    status_name: '',
+                    slot_name: '',
+                    estimated_minutes: null,
+                    muted: false
+                }
+            });
+            this.groupListVersion++;
+            this.runLayout({ fit: true });
+        },
+
+        addSelectedToGroup(groupId) {
+            if (!groupId || this.selectedNodeIds.length === 0) return;
+            for (const id of this.selectedNodeIds) {
+                if (typeof id === 'string' && id.startsWith('group-')) continue;
+                const node = this.cy.$id(id);
+                if (node.length) node.move({ parent: groupId });
+            }
+            this.cy.$id(groupId).data('groupEmpty', false);
+            this.refreshNodeLabels();
+            this.runLayout();
+        },
+
+        compoundNodes() {
+            if (!this.cy) return [];
+            return this.cy.nodes().filter(n => n.id().startsWith('group-')).toArray().map(n => ({ id: n.id(), label: n.data('label') || 'Group' }));
+        },
+
+        removeSelectedFromGroup() {
+            if (this.selectedNodeIds.length === 0) return;
+            const parentsToCheck = new Set();
+            for (const id of this.selectedNodeIds) {
+                const node = this.cy.$id(id);
+                if (node.length && node.parent().length) {
+                    const parentId = node.parent().id();
+                    parentsToCheck.add(parentId);
+                    node.move({ parent: null });
+                }
+            }
+            for (const parentId of parentsToCheck) {
+                const parent = this.cy.$id(parentId);
+                if (parent.length && parent.children().length === 0) {
+                    parent.data('groupEmpty', true);
+                }
+            }
+            this.refreshNodeLabels();
+            this.runLayout();
+        },
+
+        hasSelectedInGroup() {
+            if (!this.cy || this.selectedNodeIds.length === 0) return false;
+            return this.selectedNodeIds.some(id => {
+                const node = this.cy.$id(id);
+                return node.length && node.parent().length;
+            });
+        },
+
         async addChildNode() {
             if (this.selectedNodeIds.length === 0) return;
             const parentId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
@@ -528,16 +640,22 @@ const registerGraph = () => {
 
             const sourceId = this.selectedNodeIds[0];
             const targetId = this.selectedNodeIds[1];
+            const sourceIsGroup = typeof sourceId === 'string' && sourceId.startsWith('group-');
+            const targetIsGroup = typeof targetId === 'string' && targetId.startsWith('group-');
 
             try {
-                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
-                    parent_id: sourceId,
-                    child_id: targetId
-                });
+                if (!sourceIsGroup && !targetIsGroup) {
+                    await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
+                        parent_id: sourceId,
+                        child_id: targetId
+                    });
+                }
 
                 this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
                 this.runLayout();
-                this.recomputeMutedForGraph();
+                if (!sourceIsGroup && !targetIsGroup) {
+                    this.recomputeMutedForGraph();
+                }
             } catch (error) {
                 alert(`Error connecting nodes: ${error.message}`);
             }
@@ -548,17 +666,22 @@ const registerGraph = () => {
 
             const n1 = this.selectedNodeIds[0];
             const n2 = this.selectedNodeIds[1];
+            const n1IsGroup = typeof n1 === 'string' && n1.startsWith('group-');
+            const n2IsGroup = typeof n2 === 'string' && n2.startsWith('group-');
 
             try {
-                // Try parent->child
-                await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
-                    parent_id: n1,
-                    child_id: n2
-                });
+                if (!n1IsGroup && !n2IsGroup) {
+                    await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
+                        parent_id: n1,
+                        child_id: n2
+                    });
+                }
 
                 this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
                 this.runLayout();
-                this.recomputeMutedForGraph();
+                if (!n1IsGroup && !n2IsGroup) {
+                    this.recomputeMutedForGraph();
+                }
             } catch (error) {
                 alert(`Error disconnecting nodes: ${error.message}`);
             }
@@ -575,7 +698,14 @@ const registerGraph = () => {
 
             try {
                 for (const node of nodes) {
-                    await this.api(`/api/projects/${this.projectId}/nodes/${node.id()}`, 'DELETE');
+                    const id = node.id();
+                    if (typeof id === 'string' && id.startsWith('group-')) {
+                        node.children().move({ parent: null });
+                        this.cy.remove(node);
+                        this.groupListVersion++;
+                        continue;
+                    }
+                    await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'DELETE');
                     this.cy.remove(node);
                 }
                 this.selectedNodeIds = [];
@@ -588,6 +718,14 @@ const registerGraph = () => {
 
         async saveNode() {
             if (!this.editingNode || this.saving) return;
+
+            if (this.editingNode.isGroup) {
+                this.cy.$id(this.editingNode.id).data('label', this.editingNode.title);
+                this.refreshNodeLabels();
+                this.groupListVersion++;
+                this.editingNode = null;
+                return;
+            }
 
             this.saving = true;
 
