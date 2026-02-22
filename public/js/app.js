@@ -150,7 +150,7 @@ const registerGraph = () => {
         projectId: projectId,
         cy: null,
         selectedNodeIds: [],
-        layoutDirection: 'TB',
+        layoutDirection: 'LR',
         nodeTypeId: DEFAULTS.NODE_TYPE,
         nodeTypes: [],
         taskStatuses: [],
