@@ -158,6 +158,7 @@ const registerGraph = () => {
         taskStatuses: [],
         projectSlots: [],
         editingNode: null,
+        editingNodeOriginal: null,
         saving: false,
 
         async init() {
@@ -217,10 +218,44 @@ const registerGraph = () => {
                 estimated_amount: amount,
                 estimated_unit: unit
             };
+            this.editingNodeOriginal = {
+                title: String(this.editingNode.title ?? ''),
+                description: String(this.editingNode.description ?? ''),
+                node_type_id: String(this.editingNode.node_type_id ?? ''),
+                status_id: String(this.editingNode.status_id ?? ''),
+                slot_id: String(this.editingNode.slot_id ?? ''),
+                estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
+                estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+            };
+        },
+
+        hasEditChanges() {
+            if (!this.editingNode || !this.editingNodeOriginal) return false;
+            const n = this.editingNode;
+            const o = this.editingNodeOriginal;
+            const norm = (a) => (a == null || a === '' ? '' : String(a));
+            const eq = (a, b) => norm(a) === norm(b);
+            return !eq(n.title, o.title) || !eq(n.description, o.description) ||
+                !eq(n.node_type_id, o.node_type_id) || !eq(n.status_id, o.status_id) ||
+                !eq(n.slot_id, o.slot_id) || !eq(n.estimated_amount, o.estimated_amount) ||
+                !eq(n.estimated_unit, o.estimated_unit);
+        },
+
+        requestCloseEditPanel() {
+            if (!this.hasEditChanges()) {
+                this.closeEditPanel();
+                return;
+            }
+            if (confirm('You have unsaved changes. Save before closing?')) {
+                this.saveNode();
+            } else {
+                this.closeEditPanel();
+            }
         },
 
         closeEditPanel() {
             this.editingNode = null;
+            this.editingNodeOriginal = null;
         },
 
         async api(url, method, body = null) {
@@ -278,6 +313,7 @@ const registerGraph = () => {
         taskStatuses: [],
         projectSlots: [],
         editingNode: null, // { id, title, description, node_type_id, status_id, slot_id, estimated_amount, estimated_unit }
+        editingNodeOriginal: null,
         saving: false,
         settingsOpen: false,
         highlightBlockedTodos: true,
@@ -410,6 +446,11 @@ const registerGraph = () => {
                 const node = evt.target;
                 const id = node.id();
 
+                if (this.editingNode && this.editingNode.id !== id && this.hasEditChanges()) {
+                    this.requestCloseEditPanel({ thenSelectNodeId: id });
+                    return;
+                }
+
                 if (!this.selectedNodeIds.includes(id)) {
                     this.selectedNodeIds.push(id);
                 }
@@ -425,6 +466,7 @@ const registerGraph = () => {
                         title: node.data('label') ?? 'New group',
                         isGroup: true
                     };
+                    this.editingNodeOriginal = { id, title: String(this.editingNode.title ?? ''), isGroup: true };
                     this.refreshNodeLabels();
                     return;
                 }
@@ -444,6 +486,15 @@ const registerGraph = () => {
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
+                this.editingNodeOriginal = {
+                    title: String(this.editingNode.title ?? ''),
+                    description: String(this.editingNode.description ?? ''),
+                    node_type_id: String(this.editingNode.node_type_id ?? ''),
+                    status_id: String(this.editingNode.status_id ?? ''),
+                    slot_id: String(this.editingNode.slot_id ?? ''),
+                    estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
+                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                };
 
                 if (this.selectedNodeIds.length > 2) {
                     const firstId = this.selectedNodeIds.shift();
@@ -455,37 +506,33 @@ const registerGraph = () => {
             this.cy.on('unselect', 'node', (evt) => {
                 const id = evt.target.id();
                 this.selectedNodeIds = this.selectedNodeIds.filter(nodeId => nodeId !== id);
-
-                if (this.editingNode && this.editingNode.id === id) {
-                    this.editingNode = null;
-                }
                 this.refreshNodeLabels();
             });
 
-            this.cy.on('tap', (evt) => {
+            this.cy.on('tap', async (evt) => {
                 if (evt.target === this.cy) {
+                    await this.requestCloseEditPanel();
                     this.cy.nodes().unselect();
                     this.cy.edges().unselect();
                     this.selectedNodeIds = [];
                     this.selectedEdge = null;
-                    this.editingNode = null;
                     this.refreshNodeLabels();
                 }
             });
 
-            this.cy.on('tap', 'edge', (evt) => {
+            this.cy.on('tap', 'edge', async (evt) => {
+                await this.requestCloseEditPanel();
                 const edge = evt.target;
                 this.selectedEdge = { sourceId: edge.source().id(), targetId: edge.target().id() };
                 this.cy.nodes().unselect();
                 this.selectedNodeIds = [];
-                this.editingNode = null;
                 this.refreshNodeLabels();
                 this.cy.edges().unselect();
                 edge.select();
             });
 
             const escapeHandler = (e) => {
-                if (e.key === 'Escape' && this.editingNode) this.closeEditPanel();
+                if (e.key === 'Escape' && this.editingNode) this.requestCloseEditPanel();
             };
             document.addEventListener('keydown', escapeHandler);
 
@@ -887,6 +934,15 @@ const registerGraph = () => {
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
+                this.editingNodeOriginal = {
+                    title: String(this.editingNode.title ?? ''),
+                    description: String(this.editingNode.description ?? ''),
+                    node_type_id: String(this.editingNode.node_type_id ?? ''),
+                    status_id: String(this.editingNode.status_id ?? ''),
+                    slot_id: String(this.editingNode.slot_id ?? ''),
+                    estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
+                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                };
             } catch (error) {
                 alert(`Error adding child node: ${error.message}`);
             }
@@ -951,6 +1007,15 @@ const registerGraph = () => {
                     slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
+                };
+                this.editingNodeOriginal = {
+                    title: String(this.editingNode.title ?? ''),
+                    description: String(this.editingNode.description ?? ''),
+                    node_type_id: String(this.editingNode.node_type_id ?? ''),
+                    status_id: String(this.editingNode.status_id ?? ''),
+                    slot_id: String(this.editingNode.slot_id ?? ''),
+                    estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
+                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
                 };
             } catch (error) {
                 alert(`Error adding parent node: ${error.message}`);
@@ -1061,6 +1126,7 @@ const registerGraph = () => {
                 }
                 this.selectedNodeIds = [];
                 this.editingNode = null;
+                this.editingNodeOriginal = null;
                 this.runLayout();
             } catch (error) {
                 alert(`Error removing node: ${error.message}`);
@@ -1135,19 +1201,58 @@ const registerGraph = () => {
             }
         },
 
-        closeEditPanel() {
-            if (this.editingNode) {
-                this.cy.$id(this.editingNode.id).unselect();
+        hasEditChanges() {
+            if (!this.editingNode || !this.editingNodeOriginal) return false;
+            if (this.editingNode.isGroup) {
+                const o = this.editingNodeOriginal;
+                return String(this.editingNode.title ?? '') !== String(o.title ?? '');
+            }
+            const n = this.editingNode;
+            const o = this.editingNodeOriginal;
+            const norm = (a) => (a == null || a === '' ? '' : String(a));
+            const eq = (a, b) => norm(a) === norm(b);
+            return !eq(n.title, o.title) || !eq(n.description, o.description) ||
+                !eq(n.node_type_id, o.node_type_id) || !eq(n.status_id, o.status_id) ||
+                !eq(n.slot_id, o.slot_id) || !eq(n.estimated_amount, o.estimated_amount) ||
+                !eq(n.estimated_unit, o.estimated_unit);
+        },
+
+        doCloseEditPanel(options = {}) {
+            const id = options.editingNodeId ?? this.editingNode?.id;
+            if (id && this.cy) {
+                this.cy.$id(id).unselect();
+            }
+            this.editingNode = null;
+            this.editingNodeOriginal = null;
+            if (options.thenSelectNodeId && this.cy) {
+                this.cy.$id(options.thenSelectNodeId).select();
             }
         },
 
+        async requestCloseEditPanel(options = {}) {
+            const opts = { ...options, editingNodeId: this.editingNode?.id };
+            if (!this.hasEditChanges()) {
+                this.doCloseEditPanel(opts);
+                return;
+            }
+            if (confirm('You have unsaved changes. Save before closing?')) {
+                await this.saveNode();
+            }
+            this.doCloseEditPanel(opts);
+        },
+
+        closeEditPanel() {
+            this.requestCloseEditPanel();
+        },
+
         onEscape() {
-            if (this.editingNode) this.closeEditPanel();
+            if (this.editingNode) this.requestCloseEditPanel();
         },
 
         openSettings() {
             this.settingsOpen = true;
             this.editingNode = null;
+            this.editingNodeOriginal = null;
             this.selectedNodeIds = [];
             if (this.cy) {
                 this.cy.nodes().unselect();
