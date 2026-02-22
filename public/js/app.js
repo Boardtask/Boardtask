@@ -269,6 +269,11 @@ const registerGraph = () => {
                 }
             });
 
+            const escapeHandler = (e) => {
+                if (e.key === 'Escape' && this.editingNode) this.closeEditPanel();
+            };
+            document.addEventListener('keydown', escapeHandler);
+
             await Promise.all([this.fetchNodeTypes(), this.fetchTaskStatuses(), this.fetchProjectSlots()]);
             await this.fetchGraph();
         },
@@ -867,6 +872,10 @@ const registerGraph = () => {
             if (this.editingNode) {
                 this.cy.$id(this.editingNode.id).unselect();
             }
+        },
+
+        onEscape() {
+            if (this.editingNode) this.closeEditPanel();
         },
 
         openSettings() {
