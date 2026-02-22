@@ -145,6 +145,123 @@ const registerGraph = () => {
     Alpine.store('projectFlash', { show: false, message: '' });
 
     if (Alpine.data('graph')) return;
+    if (Alpine.data('projectList')) return;
+
+    Alpine.data('projectList', (projectId) => ({
+        projectId,
+        tasksData: [],
+        nodeTypes: [],
+        taskStatuses: [],
+        projectSlots: [],
+        editingNode: null,
+        saving: false,
+
+        async init() {
+            const el = document.getElementById('project-tasks-data');
+            if (el && el.textContent) {
+                try {
+                    this.tasksData = JSON.parse(el.textContent);
+                } catch (_) {
+                    this.tasksData = [];
+                }
+            }
+            await Promise.all([
+                this.fetchNodeTypes(),
+                this.fetchTaskStatuses(),
+                this.fetchProjectSlots()
+            ]);
+        },
+
+        async fetchNodeTypes() {
+            try {
+                const response = await fetch('/api/node-types');
+                if (!response.ok) return;
+                const data = await response.json();
+                this.nodeTypes = data.node_types || [];
+            } catch (_) {}
+        },
+
+        async fetchTaskStatuses() {
+            try {
+                const response = await fetch('/api/task-statuses');
+                if (!response.ok) return;
+                const data = await response.json();
+                this.taskStatuses = data.task_statuses || [];
+            } catch (_) {}
+        },
+
+        async fetchProjectSlots() {
+            try {
+                const response = await fetch(`/api/projects/${this.projectId}/slots`);
+                if (!response.ok) return;
+                const data = await response.json();
+                this.projectSlots = data.slots || [];
+            } catch (_) {}
+        },
+
+        openEdit(nodeId) {
+            const node = this.tasksData.find(n => n.id === nodeId);
+            if (!node) return;
+            const { amount, unit } = minutesToAmountAndUnit(node.estimated_minutes);
+            this.editingNode = {
+                id: node.id,
+                title: node.title || '',
+                description: node.description ?? '',
+                node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? node.node_type_id : DEFAULTS.NODE_TYPE,
+                status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                slot_id: node.slot_id ?? '',
+                estimated_amount: amount,
+                estimated_unit: unit
+            };
+        },
+
+        closeEditPanel() {
+            this.editingNode = null;
+        },
+
+        async api(url, method, body = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (body) options.body = JSON.stringify(body);
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(err || 'API request failed');
+            }
+            return response.status !== 204 ? await response.json() : null;
+        },
+
+        async saveNode() {
+            if (!this.editingNode || this.saving) return;
+            this.saving = true;
+            const amount = this.editingNode.estimated_amount;
+            const unit = this.editingNode.estimated_unit || 'minutes';
+            let estimatedMinutes = null;
+            if (amount !== '' && amount != null && !Number.isNaN(Number(amount))) {
+                const n = Number(amount);
+                estimatedMinutes = unit === 'hours' ? Math.round(n * 60) : Math.round(n);
+            }
+            const slotIdForApi = (this.editingNode.slot_id != null && this.editingNode.slot_id !== '') ? this.editingNode.slot_id : null;
+            try {
+                await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
+                    title: this.editingNode.title,
+                    description: this.editingNode.description,
+                    node_type_id: this.editingNode.node_type_id,
+                    status_id: this.editingNode.status_id,
+                    slot_id: slotIdForApi,
+                    estimated_minutes: estimatedMinutes
+                });
+                this.closeEditPanel();
+                window.location.reload();
+            } catch (err) {
+                alert(err.message || 'Failed to save');
+            } finally {
+                this.saving = false;
+            }
+        }
+    }));
 
     Alpine.data('graph', (projectId) => ({
         projectId: projectId,

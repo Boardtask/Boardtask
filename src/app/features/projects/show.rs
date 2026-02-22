@@ -14,23 +14,7 @@ use crate::app::{
     AppState, APP_NAME,
 };
 
-use super::progress;
-
-fn format_estimated_minutes(minutes: i64) -> String {
-    if minutes == 0 {
-        "—".to_string()
-    } else if minutes < 60 {
-        format!("{} min", minutes)
-    } else {
-        let h = minutes / 60;
-        let m = minutes % 60;
-        if m == 0 {
-            format!("{} h", h)
-        } else {
-            format!("{} h {} min", h, m)
-        }
-    }
-}
+use super::{format, helpers, progress};
 
 /// Project detail template.
 #[derive(Template)]
@@ -56,13 +40,10 @@ pub async fn show(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let project = match db::projects::find_by_id(&state.db, &id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Project not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
+    let project = match helpers::load_project(&state.db, &id).await {
+        Ok(p) => p,
+        Err((status, msg)) => return (status, msg).into_response(),
     };
-
-    // Validate org membership - never trust session, validate against resource's org
     if tenant::require_org_member(&state.db, &session.user_id, &project.organization_id)
         .await
         .is_err()
@@ -78,12 +59,7 @@ pub async fn show(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
 
-    let group_ids: std::collections::HashSet<&str> =
-        nodes.iter().filter_map(|n| n.parent_id.as_deref()).collect();
-    let task_nodes: Vec<&db::nodes::Node> = nodes
-        .iter()
-        .filter(|n| !group_ids.contains(n.id.as_str()))
-        .collect();
+    let task_nodes = helpers::task_nodes_from_nodes(&nodes);
 
     let total_count = task_nodes.len() as i64;
     let todo_count = task_nodes
@@ -110,9 +86,9 @@ pub async fn show(
         .sum();
     let estimated_left_minutes = total_estimated_minutes.saturating_sub(estimated_completed_minutes);
 
-    let total_estimated_display = format_estimated_minutes(total_estimated_minutes);
-    let estimated_left_display = format_estimated_minutes(estimated_left_minutes);
-    let estimated_completed_display = format_estimated_minutes(estimated_completed_minutes);
+    let total_estimated_display = format::format_estimated_minutes(total_estimated_minutes);
+    let estimated_left_display = format::format_estimated_minutes(estimated_left_minutes);
+    let estimated_completed_display = format::format_estimated_minutes(estimated_completed_minutes);
 
     ProjectShowTemplate {
         app_name: APP_NAME,

@@ -2,7 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 /// Database row for nodes table.
-#[derive(Debug, FromRow, serde::Serialize)]
+#[derive(Clone, Debug, FromRow, serde::Serialize)]
 pub struct Node {
     pub id: String,
     pub project_id: String,

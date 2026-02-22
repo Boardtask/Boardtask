@@ -3258,3 +3258,5 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 }
 .side-drawer__close { color: #6b7280; cursor: pointer; }
 .side-drawer__close:hover { color: #111827; }
+/* List view: keep drawer fixed in viewport when scrolling the task list */
+.project-list-view .side-drawer { position: fixed; top: 0; right: 0; bottom: 0; }
