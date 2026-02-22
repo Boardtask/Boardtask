@@ -25,6 +25,7 @@ pub struct CreateNodeRequest {
     pub description: Option<String>,
     pub status_id: Option<String>,
     pub slot_id: Option<String>,
+    pub parent_id: Option<String>,
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
     pub estimated_minutes: Option<i64>,
 }
@@ -42,14 +43,17 @@ pub struct NodeResponse {
     pub updated_at: Option<i64>,
     pub estimated_minutes: Option<i64>,
     pub slot_id: Option<String>,
+    pub parent_id: Option<String>,
 }
 
-/// Validates create-node request (sync rules + DB-backed node_type_id, status_id, slot_id). Returns (node_type_id, status_id, slot_id).
+/// Validates create-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id).
+/// Returns (node_type_id, status_id, slot_id, parent_id).
 async fn validate_create_node_request(
     request: &CreateNodeRequest,
     pool: &sqlx::SqlitePool,
     project_id: &str,
-) -> Result<(String, String, Option<String>), AppError> {
+    new_node_id: &str,
+) -> Result<(String, String, Option<String>, Option<String>), AppError> {
     request
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
@@ -81,7 +85,28 @@ async fn validate_create_node_request(
         }
     };
 
-    Ok((request.node_type_id.clone(), status_id, slot_id))
+    let parent_id = match &request.parent_id {
+        None => None,
+        Some(pid) => {
+            if pid == new_node_id {
+                return Err(AppError::Validation("parent_id cannot be self".to_string()));
+            }
+            let parent = db::nodes::find_by_id(pool, pid)
+                .await?
+                .ok_or_else(|| AppError::Validation("Invalid parent_id".to_string()))?;
+            if parent.project_id != project_id {
+                return Err(AppError::Validation("Invalid parent_id".to_string()));
+            }
+            Some(pid.clone())
+        }
+    };
+
+    Ok((
+        request.node_type_id.clone(),
+        status_id,
+        slot_id,
+        parent_id,
+    ))
 }
 
 /// POST /api/projects/:project_id/nodes — Create a new node.
@@ -94,12 +119,11 @@ pub async fn create_node(
     // Validate org membership on every write
     let project = super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
 
-    let (node_type_id, status_id, slot_id) = validate_create_node_request(&request, &state.db, &project_id).await?;
-
-    // Generate ULID for node
+    // Generate ULID for node (needed for parent_id self-check)
     let node_id = Ulid::new().to_string();
+    let (node_type_id, status_id, slot_id, parent_id) =
+        validate_create_node_request(&request, &state.db, &project_id, &node_id).await?;
 
-    // Create and insert node
     let new_node = db::nodes::NewNode {
         id: node_id.clone(),
         project_id: project.id.clone(),
@@ -109,11 +133,11 @@ pub async fn create_node(
         description: request.description,
         estimated_minutes: request.estimated_minutes,
         slot_id,
+        parent_id,
     };
 
     db::nodes::insert(&state.db, &new_node).await?;
 
-    // Fetch the created node for response
     let node = db::nodes::find_by_id(&state.db, &node_id)
         .await?
         .ok_or_else(|| AppError::Internal)?;
@@ -129,6 +153,7 @@ pub async fn create_node(
         updated_at: node.updated_at,
         estimated_minutes: node.estimated_minutes,
         slot_id: node.slot_id,
+        parent_id: node.parent_id,
     };
 
     Ok((StatusCode::CREATED, Json(response)))

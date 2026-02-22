@@ -1,18 +1,27 @@
 //! Progress and blocked counts for project show (computed in code from nodes + edges).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::app::db::{node_edges, nodes, task_statuses};
 
 /// Counts nodes that are blocked (dependent on an incomplete parent).
+/// Only dependency edges (node_edges) count; group containment (parent_id) does not block.
 /// Returns (blocked_count, blocked_todo_count, blocked_in_progress_count).
 pub fn count_blocked(
     nodes: &[nodes::Node],
     edges: &[node_edges::NodeEdge],
 ) -> (i64, i64, i64) {
+    let group_ids: HashSet<&str> = nodes
+        .iter()
+        .filter_map(|n| n.parent_id.as_deref())
+        .collect();
+
     let parent_ids_by_child: HashMap<&str, Vec<&str>> = {
         let mut m: HashMap<&str, Vec<&str>> = HashMap::new();
         for e in edges {
+            if group_ids.contains(e.parent_id.as_str()) {
+                continue;
+            }
             m.entry(e.child_id.as_str())
                 .or_default()
                 .push(e.parent_id.as_str());
@@ -64,6 +73,10 @@ mod tests {
     use crate::app::db::{node_edges, nodes, task_statuses};
 
     fn node(id: &str, status_id: &str) -> nodes::Node {
+        node_with_parent(id, status_id, None)
+    }
+
+    fn node_with_parent(id: &str, status_id: &str, parent_id: Option<&str>) -> nodes::Node {
         nodes::Node {
             id: id.to_string(),
             project_id: "project".to_string(),
@@ -75,6 +88,7 @@ mod tests {
             updated_at: None,
             estimated_minutes: None,
             slot_id: None,
+            parent_id: parent_id.map(String::from),
         }
     }
 
@@ -170,5 +184,20 @@ mod tests {
         ];
         let (blocked2, _, _) = count_blocked(&nodes_done_b, &edges);
         assert_eq!(blocked2, 0, "C not blocked when parent B is done");
+    }
+
+    #[test]
+    fn group_parent_does_not_block_only_dependency_edges_do() {
+        // B is a group (C has parent_id B). Edges: X -> A -> C. So A is non-root. C should be blocked by A (dependency edge), not by B (containment).
+        let nodes = vec![
+            node("x", task_statuses::TODO_STATUS_ID),
+            node("a", task_statuses::TODO_STATUS_ID),
+            node_with_parent("b", task_statuses::TODO_STATUS_ID, None),
+            node_with_parent("c", task_statuses::TODO_STATUS_ID, Some("b")),
+        ];
+        let edges = vec![edge("x", "a"), edge("a", "c")];
+        let (blocked, blocked_todo, _) = count_blocked(&nodes, &edges);
+        assert_eq!(blocked, 1, "C is blocked by A (dependency edge), not by group B");
+        assert_eq!(blocked_todo, 1);
     }
 }

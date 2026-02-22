@@ -70,41 +70,6 @@ pub async fn show(
         return (StatusCode::NOT_FOUND, "Project not found").into_response();
     }
 
-    let total_count = match db::nodes::count_by_project(&state.db, &id).await {
-        Ok(t) => t,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
-    };
-    let todo_count = match db::nodes::count_by_project_and_status(
-        &state.db,
-        &id,
-        db::task_statuses::TODO_STATUS_ID,
-    )
-    .await
-    {
-        Ok(c) => c,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
-    };
-    let in_progress_count = match db::nodes::count_by_project_and_status(
-        &state.db,
-        &id,
-        db::task_statuses::IN_PROGRESS_STATUS_ID,
-    )
-    .await
-    {
-        Ok(c) => c,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
-    };
-    let completed_count = match db::nodes::count_by_project_and_status(
-        &state.db,
-        &id,
-        db::task_statuses::DONE_STATUS_ID,
-    )
-    .await
-    {
-        Ok(c) => c,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
-    };
-
     let (nodes, edges) = match tokio::try_join!(
         db::nodes::find_by_project(&state.db, &id),
         db::node_edges::find_by_project(&state.db, &id),
@@ -112,11 +77,33 @@ pub async fn show(
         Ok((n, e)) => (n, e),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };
+
+    let group_ids: std::collections::HashSet<&str> =
+        nodes.iter().filter_map(|n| n.parent_id.as_deref()).collect();
+    let task_nodes: Vec<&db::nodes::Node> = nodes
+        .iter()
+        .filter(|n| !group_ids.contains(n.id.as_str()))
+        .collect();
+
+    let total_count = task_nodes.len() as i64;
+    let todo_count = task_nodes
+        .iter()
+        .filter(|n| n.status_id == db::task_statuses::TODO_STATUS_ID)
+        .count() as i64;
+    let in_progress_count = task_nodes
+        .iter()
+        .filter(|n| n.status_id == db::task_statuses::IN_PROGRESS_STATUS_ID)
+        .count() as i64;
+    let completed_count = task_nodes
+        .iter()
+        .filter(|n| n.status_id == db::task_statuses::DONE_STATUS_ID)
+        .count() as i64;
+
     let (blocked_count, blocked_todo_count, blocked_in_progress_count) =
         progress::count_blocked(&nodes, &edges);
 
-    let total_estimated_minutes: i64 = nodes.iter().filter_map(|n| n.estimated_minutes).sum();
-    let estimated_completed_minutes: i64 = nodes
+    let total_estimated_minutes: i64 = task_nodes.iter().filter_map(|n| n.estimated_minutes).sum();
+    let estimated_completed_minutes: i64 = task_nodes
         .iter()
         .filter(|n| n.status_id == db::task_statuses::DONE_STATUS_ID)
         .filter_map(|n| n.estimated_minutes)

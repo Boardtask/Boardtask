@@ -409,6 +409,7 @@ mod patch_node {
             description: None,
             estimated_minutes: Some(30),
             slot_id: None,
+            parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
 
@@ -491,6 +492,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
 
@@ -590,6 +592,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
 
@@ -656,6 +659,7 @@ async fn post_edge_succeeds() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     let child_node = db::nodes::NewNode {
         id: child_node_id.clone(),
@@ -666,6 +670,7 @@ async fn post_edge_succeeds() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
 
     boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
@@ -709,6 +714,7 @@ async fn post_edge_rejects_self_referential() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
 
@@ -748,6 +754,7 @@ async fn post_edge_duplicate_returns_conflict_or_error() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     let child_node = db::nodes::NewNode {
         id: child_node_id.clone(),
@@ -758,6 +765,7 @@ async fn post_edge_duplicate_returns_conflict_or_error() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
     boardtask::app::db::nodes::insert(&pool, &child_node).await.unwrap();
@@ -807,6 +815,7 @@ async fn post_edge_404_when_node_not_in_project() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
 
@@ -830,6 +839,7 @@ async fn post_edge_404_when_node_not_in_project() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
 
@@ -947,6 +957,7 @@ mod get_graph {
             description: Some("First node".to_string()),
             estimated_minutes: None,
             slot_id: None,
+            parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
 
@@ -960,6 +971,7 @@ mod get_graph {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();
 

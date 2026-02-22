@@ -40,6 +40,9 @@ pub struct UpdateNodeRequest {
     /// Omit = unchanged, null = clear slot.
     #[serde(default, deserialize_with = "deserialize_optional_option")]
     pub slot_id: Option<Option<String>>,
+    /// Omit = unchanged, null = clear parent (ungroup).
+    #[serde(default, deserialize_with = "deserialize_optional_option")]
+    pub parent_id: Option<Option<String>>,
     /// Omit = unchanged, null = clear estimate.
     #[serde(default, deserialize_with = "deserialize_optional_option")]
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
@@ -59,16 +62,19 @@ pub struct NodeResponse {
     pub updated_at: Option<i64>,
     pub estimated_minutes: Option<i64>,
     pub slot_id: Option<String>,
+    pub parent_id: Option<String>,
 }
 
-/// Validates update-node request (sync rules + DB-backed node_type_id, status_id, slot_id when provided).
+/// Validates update-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id when provided).
 async fn validate_update_node_request(
     request: &UpdateNodeRequest,
     pool: &sqlx::SqlitePool,
     merged_node_type_id: &str,
     merged_status_id: &str,
     _merged_slot_id: &Option<String>,
+    _merged_parent_id: &Option<String>,
     project_id: &str,
+    node_id: &str,
 ) -> Result<(), AppError> {
     request
         .validate()
@@ -90,6 +96,17 @@ async fn validate_update_node_request(
             .ok_or_else(|| AppError::Validation("Invalid slot_id".to_string()))?;
         if slot.project_id != project_id {
             return Err(AppError::Validation("Invalid slot_id".to_string()));
+        }
+    }
+    if let Some(Some(pid)) = &request.parent_id {
+        if pid == node_id {
+            return Err(AppError::Validation("parent_id cannot be self".to_string()));
+        }
+        let parent = db::nodes::find_by_id(pool, pid)
+            .await?
+            .ok_or_else(|| AppError::Validation("Invalid parent_id".to_string()))?;
+        if parent.project_id != project_id {
+            return Err(AppError::Validation("Invalid parent_id".to_string()));
         }
     }
 
@@ -120,13 +137,19 @@ pub async fn update_node(
         .slot_id
         .clone()
         .unwrap_or_else(|| node.slot_id.clone());
+    let parent_id = request
+        .parent_id
+        .clone()
+        .unwrap_or_else(|| node.parent_id.clone());
     validate_update_node_request(
         &request,
         &state.db,
         node_type_id,
         status_id,
         &slot_id,
+        &parent_id,
         &params.project_id,
+        &node.id,
     )
     .await?;
 
@@ -134,7 +157,6 @@ pub async fn update_node(
     let description = request.description.or(node.description);
     let estimated_minutes = request.estimated_minutes.unwrap_or(node.estimated_minutes);
 
-    // Update the node
     db::nodes::update(
         &state.db,
         &node.id,
@@ -144,6 +166,7 @@ pub async fn update_node(
         status_id,
         estimated_minutes,
         slot_id.as_deref(),
+        parent_id.as_deref(),
     )
     .await?;
 
@@ -163,6 +186,7 @@ pub async fn update_node(
         updated_at: updated_node.updated_at,
         estimated_minutes: updated_node.estimated_minutes,
         slot_id: updated_node.slot_id,
+        parent_id: updated_node.parent_id,
     };
 
     Ok((StatusCode::OK, Json(response)))

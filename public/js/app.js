@@ -48,7 +48,8 @@ function escapeHtml(str) {
  */
 function buildNodeLabelHtml(data, opts) {
     // Group nodes: when empty show a named box; when they have children only the :parent border is shown (no card).
-    if (typeof data.id === 'string' && data.id.startsWith('group-')) {
+    const isGroup = data.isGroup === true;
+    if (isGroup) {
         if (data.groupEmpty !== false) {
             const label = escapeHtml(data.label ?? 'New group');
             const selectedClass = opts.selected ? ' cy-node--selected' : '';
@@ -108,6 +109,18 @@ const registerGraph = () => {
         slotError: '',
         groupListVersion: 0,
 
+        isGroupNode(nodeOrId) {
+            if (!this.cy) return false;
+            const node = typeof nodeOrId === 'string' ? this.cy.$id(nodeOrId) : nodeOrId;
+            return node.length !== 0 && node.data('isGroup') === true;
+        },
+
+        isTemporaryGroupNode(nodeOrId) {
+            if (!this.cy) return false;
+            const node = typeof nodeOrId === 'string' ? this.cy.$id(nodeOrId) : nodeOrId;
+            return node.length !== 0 && node.data('isGroup') === true && node.data('isTemporary') === true;
+        },
+
         async init() {
             this.cy = cytoscape({
                 container: this.$refs.canvas,
@@ -147,7 +160,7 @@ const registerGraph = () => {
                         }
                     },
                     {
-                        selector: 'node[id^="group-"]',
+                        selector: 'node[isGroup]',
                         style: {
                             'opacity': 1
                         }
@@ -199,8 +212,8 @@ const registerGraph = () => {
                     this.selectedNodeIds.push(id);
                 }
 
-                // Group nodes (UI-only): open edit panel with name-only (isGroup: true)
-                if (typeof id === 'string' && id.startsWith('group-')) {
+                // Group nodes: open edit panel with name-only (isGroup: true)
+                if (this.isGroupNode(node)) {
                     if (this.selectedNodeIds.length > 2) {
                         const firstId = this.selectedNodeIds.shift();
                         this.cy.$id(firstId).unselect();
@@ -266,6 +279,7 @@ const registerGraph = () => {
                 if (!response.ok) throw new Error('Failed to fetch graph');
                 const data = await response.json();
 
+                const groupIds = new Set(data.nodes.map(n => n.parent_id).filter(Boolean));
                 const parentIdsById = {};
                 data.edges.forEach(e => {
                     if (!parentIdsById[e.child_id]) parentIdsById[e.child_id] = [];
@@ -288,10 +302,12 @@ const registerGraph = () => {
                         const root = isRoot(n.id);
                         const done = isDone(n.id);
                         const muted = !root && !done && hasBlockingParent(n.id);
+                        const isGroupNode = groupIds.has(n.id);
                         return {
                             group: 'nodes',
                             data: {
                                 id: n.id,
+                                parent: n.parent_id || undefined,
                                 label: n.title,
                                 description: n.description,
                                 node_type_id: n.node_type_id,
@@ -302,7 +318,9 @@ const registerGraph = () => {
                                 slot_id: n.slot_id ?? '',
                                 slot_name: slot ? slot.name : '',
                                 estimated_minutes: n.estimated_minutes ?? null,
-                                muted: !!muted
+                                muted: !!muted,
+                                isGroup: isGroupNode,
+                                groupEmpty: isGroupNode ? false : undefined
                             }
                         };
                     }),
@@ -443,12 +461,14 @@ const registerGraph = () => {
         },
 
         createGroup() {
-            const id = 'group-' + Date.now();
+            const id = crypto.randomUUID();
             this.cy.add({
                 group: 'nodes',
                 data: {
                     id,
                     label: 'New group',
+                    isGroup: true,
+                    isTemporary: true,
                     groupEmpty: true,
                     node_type_name: 'Group',
                     node_type_color: '#94A3B8',
@@ -462,42 +482,95 @@ const registerGraph = () => {
             this.runLayout({ fit: true });
         },
 
-        addSelectedToGroup(groupId) {
+        async addSelectedToGroup(groupId) {
             if (!groupId || this.selectedNodeIds.length === 0) return;
-            for (const id of this.selectedNodeIds) {
-                if (typeof id === 'string' && id.startsWith('group-')) continue;
-                const node = this.cy.$id(id);
-                if (node.length) node.move({ parent: groupId });
+            const taskIds = this.selectedNodeIds.filter(id => !this.isGroupNode(id));
+            if (taskIds.length === 0) return;
+
+            try {
+                if (this.isTemporaryGroupNode(groupId)) {
+                    const groupNode = this.cy.$id(groupId);
+                    if (!groupNode.length) return;
+                    const label = groupNode.data('label') || 'New group';
+                    const newGroup = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
+                        node_type_id: DEFAULTS.NODE_TYPE,
+                        title: label,
+                        description: '',
+                        status_id: DEFAULTS.STATUS_ID
+                    });
+                    const newGroupId = newGroup.id;
+                    for (const id of taskIds) {
+                        await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { parent_id: newGroupId });
+                    }
+                    groupNode.children().move({ parent: null });
+                    this.cy.remove(groupNode);
+                    this.cy.add({
+                        group: 'nodes',
+                        data: {
+                            id: newGroupId,
+                            label: newGroup.title,
+                            isGroup: true,
+                            groupEmpty: false,
+                            node_type_name: 'Group',
+                            node_type_color: '#94A3B8',
+                            status_name: '',
+                            slot_name: '',
+                            estimated_minutes: null,
+                            muted: false
+                        }
+                    });
+                    for (const id of taskIds) {
+                        const node = this.cy.$id(id);
+                        if (node.length) node.move({ parent: newGroupId });
+                    }
+                    this.groupListVersion++;
+                } else {
+                    for (const id of taskIds) {
+                        await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { parent_id: groupId });
+                        const node = this.cy.$id(id);
+                        if (node.length) node.move({ parent: groupId });
+                    }
+                }
+                this.refreshNodeLabels();
+                this.runLayout();
+            } catch (error) {
+                alert(`Error adding to group: ${error.message}`);
             }
-            this.cy.$id(groupId).data('groupEmpty', false);
-            this.refreshNodeLabels();
-            this.runLayout();
         },
 
         compoundNodes() {
             if (!this.cy) return [];
-            return this.cy.nodes().filter(n => n.id().startsWith('group-')).toArray().map(n => ({ id: n.id(), label: n.data('label') || 'Group' }));
+            const all = this.cy.nodes().filter(n => n.data('isGroup') === true).toArray();
+            return all.map(n => ({ id: n.id(), label: n.data('label') || 'Group' }));
         },
 
-        removeSelectedFromGroup() {
+        async removeSelectedFromGroup() {
             if (this.selectedNodeIds.length === 0) return;
             const parentsToCheck = new Set();
-            for (const id of this.selectedNodeIds) {
-                const node = this.cy.$id(id);
-                if (node.length && node.parent().length) {
-                    const parentId = node.parent().id();
-                    parentsToCheck.add(parentId);
-                    node.move({ parent: null });
+            try {
+                for (const id of this.selectedNodeIds) {
+                    const node = this.cy.$id(id);
+                    if (node.length && node.parent().length) {
+                        const parentId = node.parent().id();
+                        parentsToCheck.add(parentId);
+                        const isPersisted = !(node.data('isGroup') && node.data('isTemporary'));
+                        if (isPersisted) {
+                            await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { parent_id: null });
+                        }
+                        node.move({ parent: null });
+                    }
                 }
-            }
-            for (const parentId of parentsToCheck) {
-                const parent = this.cy.$id(parentId);
-                if (parent.length && parent.children().length === 0) {
-                    parent.data('groupEmpty', true);
+                for (const parentId of parentsToCheck) {
+                    const parent = this.cy.$id(parentId);
+                    if (parent.length && parent.children().length === 0) {
+                        parent.data('groupEmpty', true);
+                    }
                 }
+                this.refreshNodeLabels();
+                this.runLayout();
+            } catch (error) {
+                alert(`Error removing from group: ${error.message}`);
             }
-            this.refreshNodeLabels();
-            this.runLayout();
         },
 
         hasSelectedInGroup() {
@@ -640,8 +713,8 @@ const registerGraph = () => {
 
             const sourceId = this.selectedNodeIds[0];
             const targetId = this.selectedNodeIds[1];
-            const sourceIsGroup = typeof sourceId === 'string' && sourceId.startsWith('group-');
-            const targetIsGroup = typeof targetId === 'string' && targetId.startsWith('group-');
+            const sourceIsGroup = this.isGroupNode(sourceId);
+            const targetIsGroup = this.isGroupNode(targetId);
 
             try {
                 if (!sourceIsGroup && !targetIsGroup) {
@@ -666,8 +739,8 @@ const registerGraph = () => {
 
             const n1 = this.selectedNodeIds[0];
             const n2 = this.selectedNodeIds[1];
-            const n1IsGroup = typeof n1 === 'string' && n1.startsWith('group-');
-            const n2IsGroup = typeof n2 === 'string' && n2.startsWith('group-');
+            const n1IsGroup = this.isGroupNode(n1);
+            const n2IsGroup = this.isGroupNode(n2);
 
             try {
                 if (!n1IsGroup && !n2IsGroup) {
@@ -699,7 +772,14 @@ const registerGraph = () => {
             try {
                 for (const node of nodes) {
                     const id = node.id();
-                    if (typeof id === 'string' && id.startsWith('group-')) {
+                    if (this.isTemporaryGroupNode(node)) {
+                        node.children().move({ parent: null });
+                        this.cy.remove(node);
+                        this.groupListVersion++;
+                        continue;
+                    }
+                    if (node.data('isGroup') === true) {
+                        await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'DELETE');
                         node.children().move({ parent: null });
                         this.cy.remove(node);
                         this.groupListVersion++;
@@ -720,9 +800,16 @@ const registerGraph = () => {
             if (!this.editingNode || this.saving) return;
 
             if (this.editingNode.isGroup) {
-                this.cy.$id(this.editingNode.id).data('label', this.editingNode.title);
+                const id = this.editingNode.id;
+                const node = this.cy.$id(id);
+                if (node.length && node.data('isTemporary') === true) {
+                    this.cy.$id(id).data('label', this.editingNode.title);
+                    this.groupListVersion++;
+                } else {
+                    await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { title: this.editingNode.title });
+                    this.cy.$id(id).data('label', this.editingNode.title);
+                }
                 this.refreshNodeLabels();
-                this.groupListVersion++;
                 this.editingNode = null;
                 return;
             }
