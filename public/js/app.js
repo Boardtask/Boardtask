@@ -150,6 +150,7 @@ const registerGraph = () => {
         projectId: projectId,
         cy: null,
         selectedNodeIds: [],
+        selectedEdge: null, // { sourceId, targetId } when one edge is selected
         layoutDirection: 'LR',
         nodeTypeId: DEFAULTS.NODE_TYPE,
         nodeTypes: [],
@@ -201,6 +202,14 @@ const registerGraph = () => {
                             'target-arrow-color': '#C7D2FE',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier'
+                        }
+                    },
+                    {
+                        selector: 'edge:selected',
+                        style: {
+                            'width': 3,
+                            'line-color': '#6366F1',
+                            'target-arrow-color': '#6366F1'
                         }
                     },
                     {
@@ -260,6 +269,8 @@ const registerGraph = () => {
 
             this.cy.on('select', 'node', (evt) => {
                 this.settingsOpen = false;
+                this.cy.edges().unselect();
+                this.selectedEdge = null;
 
                 const node = evt.target;
                 const id = node.id();
@@ -319,10 +330,23 @@ const registerGraph = () => {
             this.cy.on('tap', (evt) => {
                 if (evt.target === this.cy) {
                     this.cy.nodes().unselect();
+                    this.cy.edges().unselect();
                     this.selectedNodeIds = [];
+                    this.selectedEdge = null;
                     this.editingNode = null;
                     this.refreshNodeLabels();
                 }
+            });
+
+            this.cy.on('tap', 'edge', (evt) => {
+                const edge = evt.target;
+                this.selectedEdge = { sourceId: edge.source().id(), targetId: edge.target().id() };
+                this.cy.nodes().unselect();
+                this.selectedNodeIds = [];
+                this.editingNode = null;
+                this.refreshNodeLabels();
+                this.cy.edges().unselect();
+                edge.select();
             });
 
             const escapeHandler = (e) => {
@@ -391,6 +415,7 @@ const registerGraph = () => {
 
                 this.cy.elements().remove();
                 this.cy.add(elements);
+                this.selectedEdge = null;
                 this.runLayout({ fit: true });
             } catch (error) {
                 console.error('Fetch error:', error);
@@ -799,6 +824,28 @@ const registerGraph = () => {
         },
 
         async disconnectNodes() {
+            if (this.selectedEdge) {
+                const { sourceId: n1, targetId: n2 } = this.selectedEdge;
+                const n1IsGroup = this.isGroupNode(n1);
+                const n2IsGroup = this.isGroupNode(n2);
+                try {
+                    if (!n1IsGroup && !n2IsGroup) {
+                        await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
+                            parent_id: n1,
+                            child_id: n2
+                        });
+                    }
+                    this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
+                    this.selectedEdge = null;
+                    this.runLayout();
+                    if (!n1IsGroup && !n2IsGroup) {
+                        this.recomputeMutedForGraph();
+                    }
+                } catch (error) {
+                    alert(`Error disconnecting nodes: ${error.message}`);
+                }
+                return;
+            }
             if (this.selectedNodeIds.length !== 2) return;
 
             const n1 = this.selectedNodeIds[0];
