@@ -15,6 +15,8 @@ const DEFAULTS = {
     STATUS_ID: "01JSTATUS00000000TODO0000"
 };
 
+const TODO_STATUS_ID = '01JSTATUS00000000TODO0000';
+const IN_PROGRESS_STATUS_ID = '01JSTATUS00000000INPROG00';
 const DONE_STATUS_ID = '01JSTATUS00000000DONE0000';
 
 function minutesToAmountAndUnit(minutes) {
@@ -44,7 +46,7 @@ function escapeHtml(str) {
 /**
  * Build cytoscape node label HTML with all API/DB-derived values escaped.
  * @param {object} data - Node data (label, node_type_name, node_type_color, status_name, slot_name, estimated_minutes, muted)
- * @param {{ selected: boolean, muted: boolean }} opts
+ * @param {{ selected: boolean, muted: boolean, filteredOut: boolean }} opts
  */
 function buildNodeLabelHtml(data, opts) {
     // Group nodes: when empty show a named box; when they have children only the :parent border is shown (no card).
@@ -53,7 +55,8 @@ function buildNodeLabelHtml(data, opts) {
         if (data.groupEmpty !== false) {
             const label = escapeHtml(data.label ?? 'New group');
             const selectedClass = opts.selected ? ' cy-node--selected' : '';
-            return `<div class="cy-node cy-node--compact${selectedClass}" style="border-color: #94A3B8; border-left-color: #94A3B8;">
+            const filteredClass = opts.filteredOut ? ' cy-node--filtered' : '';
+            return `<div class="cy-node cy-node--compact${selectedClass}${filteredClass}" style="border-color: #94A3B8; border-left-color: #94A3B8;">
                                 <div class="cy-node__header"><span class="cy-node__label" style="font-weight: 600;">${label}</span></div>
                                 <div class="cy-node__meta"><span class="cy-node__type text-xs" style="color: #94A3B8;">Group</span></div>
                             </div>`;
@@ -71,9 +74,10 @@ function buildNodeLabelHtml(data, opts) {
     const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
     const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name) ? ' cy-node--compact' : '';
     const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
+    const filteredClass = (opts.filteredOut) ? ' cy-node--filtered' : '';
     const selectedClass = opts.selected ? ' cy-node--selected' : '';
     const label = escapeHtml(data.label ?? '');
-    return `<div class="cy-node${compactClass}${mutedClass}${selectedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
+    return `<div class="cy-node${compactClass}${mutedClass}${filteredClass}${selectedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
                                 <div class="cy-node__header">
                                     <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
                                     ${slotHtml}
@@ -277,6 +281,7 @@ const registerGraph = () => {
         saving: false,
         settingsOpen: false,
         highlightBlockedTodos: true,
+        progressFilter: '', // '' | 'todo' | 'in_progress' | 'done'
         editingSlotId: null,
         editingSlotName: '',
         newSlotName: '',
@@ -293,6 +298,17 @@ const registerGraph = () => {
             if (!this.cy) return false;
             const node = typeof nodeOrId === 'string' ? this.cy.$id(nodeOrId) : nodeOrId;
             return node.length !== 0 && node.data('isGroup') === true && node.data('isTemporary') === true;
+        },
+
+        matchesProgressFilter(statusId) {
+            if (!this.progressFilter) return true;
+            const sid = statusId || DEFAULTS.STATUS_ID;
+            switch (this.progressFilter) {
+                case 'todo': return sid === TODO_STATUS_ID;
+                case 'in_progress': return sid === IN_PROGRESS_STATUS_ID;
+                case 'done': return sid === DONE_STATUS_ID;
+                default: return true;
+            }
         },
 
         async init() {
@@ -367,7 +383,8 @@ const registerGraph = () => {
                         valignBox: 'center',
                         tpl: (data) => buildNodeLabelHtml(data, {
                             selected: false,
-                            muted: this.highlightBlockedTodos && data.muted
+                            muted: this.highlightBlockedTodos && data.muted,
+                            filteredOut: !!data.filteredOut
                         })
                     },
                     {
@@ -378,7 +395,8 @@ const registerGraph = () => {
                         valignBox: 'center',
                         tpl: (data) => buildNodeLabelHtml(data, {
                             selected: true,
-                            muted: this.highlightBlockedTodos && data.muted
+                            muted: this.highlightBlockedTodos && data.muted,
+                            filteredOut: !!data.filteredOut
                         })
                     }
                 ]);
@@ -505,6 +523,8 @@ const registerGraph = () => {
                         const done = isDone(n.id);
                         const muted = !root && !done && hasBlockingParent(n.id);
                         const isGroupNode = groupIds.has(n.id);
+                        const statusId = n.status_id ?? DEFAULTS.STATUS_ID;
+                        const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
                         return {
                             group: 'nodes',
                             data: {
@@ -515,12 +535,13 @@ const registerGraph = () => {
                                 node_type_id: n.node_type_id,
                                 node_type_name: type ? type.name : '',
                                 node_type_color: type ? type.color : '#4F46E5',
-                                status_id: n.status_id ?? DEFAULTS.STATUS_ID,
+                                status_id: statusId,
                                 status_name: status ? status.name : 'To do',
                                 slot_id: n.slot_id ?? '',
                                 slot_name: slot ? slot.name : '',
                                 estimated_minutes: n.estimated_minutes ?? null,
                                 muted: !!muted,
+                                filteredOut: !!filteredOut,
                                 isGroup: isGroupNode,
                                 groupEmpty: isGroupNode ? false : undefined,
                                 created_at: n.created_at
@@ -566,6 +587,19 @@ const registerGraph = () => {
             });
             try {
                 const nh = cy.nodeHtmlLabel && cy.nodeHtmlLabel();
+                if (nh && typeof nh.update === 'function') nh.update();
+            } catch (_) {}
+        },
+
+        recomputeFilteredForGraph() {
+            if (!this.cy) return;
+            const statusIdFor = (node) => node.data('status_id') || DEFAULTS.STATUS_ID;
+            this.cy.nodes().forEach(node => {
+                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusIdFor(node)) : false;
+                node.data('filteredOut', !!filteredOut);
+            });
+            try {
+                const nh = this.cy.nodeHtmlLabel && this.cy.nodeHtmlLabel();
                 if (nh && typeof nh.update === 'function') nh.update();
             } catch (_) {}
         },
@@ -641,6 +675,8 @@ const registerGraph = () => {
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
+                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
+                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
                 this.cy.add({
                     group: 'nodes',
                     data: {
@@ -649,13 +685,14 @@ const registerGraph = () => {
                         description: node.description,
                         node_type_id: node.node_type_id,
                         node_type_name: type ? type.name : '',
-                        status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                        status_id: statusId,
                         status_name: status ? status.name : 'To do',
                         node_type_color: type ? type.color : '#4F46E5',
                         slot_id: node.slot_id ?? '',
                         slot_name: slot ? slot.name : '',
                         estimated_minutes: node.estimated_minutes ?? null,
-                        muted: false
+                        muted: false,
+                        filteredOut: !!filteredOut
                     }
                 });
                 this.runLayout({ fit: true });
@@ -811,6 +848,8 @@ const registerGraph = () => {
                 const parentDone = (parentNode.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
                 const newNodeDone = (node.status_id ?? DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
                 const muted = !newNodeDone && !isParentRoot && !parentDone;
+                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
+                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
                 this.cy.add([
                     {
                         group: 'nodes',
@@ -821,12 +860,13 @@ const registerGraph = () => {
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
                             node_type_color: type ? type.color : '#4F46E5',
-                            status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                            status_id: statusId,
                             status_name: status ? status.name : 'To do',
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
                             estimated_minutes: node.estimated_minutes ?? null,
                             muted: !!muted,
+                            filteredOut: !!filteredOut,
                             created_at: node.created_at
                         }
                     },
@@ -873,6 +913,8 @@ const registerGraph = () => {
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
+                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
+                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
                 this.cy.add([
                     {
                         group: 'nodes',
@@ -883,12 +925,13 @@ const registerGraph = () => {
                             node_type_id: node.node_type_id,
                             node_type_name: type ? type.name : '',
                             node_type_color: type ? type.color : '#4F46E5',
-                            status_id: node.status_id ?? DEFAULTS.STATUS_ID,
+                            status_id: statusId,
                             status_name: status ? status.name : 'To do',
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
                             estimated_minutes: node.estimated_minutes ?? null,
                             muted: false,
+                            filteredOut: !!filteredOut,
                             created_at: node.created_at
                         }
                     },
@@ -1080,6 +1123,7 @@ const registerGraph = () => {
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.recomputeMutedForGraph();
+                this.recomputeFilteredForGraph();
                 Alpine.store('projectFlash', { show: true, message: 'Save Success!' });
                 setTimeout(() => {
                     Alpine.store('projectFlash', { show: false, message: '' });
