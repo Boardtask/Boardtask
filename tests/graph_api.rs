@@ -329,6 +329,140 @@ async fn post_node_slot_id_from_other_project_returns_error() {
 }
 
 #[tokio::test]
+async fn post_node_with_parent_id_succeeds() {
+    let (cookie, project_id, _pool, app) = setup_user_and_project("parentid@example.com", "Password123").await;
+
+    let post_group_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "node_type_id": TASK_NODE_TYPE_ID, "title": "Group" }).to_string(),
+        ))
+        .unwrap();
+    let post_group_res = app.clone().oneshot(post_group_req).await.unwrap();
+    assert_eq!(post_group_res.status(), http::StatusCode::CREATED);
+    let group_body: serde_json::Value =
+        serde_json::from_slice(&post_group_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let group_id = group_body["id"].as_str().unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Child in group",
+        "parent_id": group_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::CREATED);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["parent_id"], group_id);
+    let child_id = body["id"].as_str().unwrap();
+
+    let get_request = http::Request::builder()
+        .method("GET")
+        .uri(&format!("/api/projects/{}/graph", project_id))
+        .header("cookie", &cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let get_response = app.oneshot(get_request).await.unwrap();
+    assert_eq!(get_response.status(), http::StatusCode::OK);
+    let get_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+    let graph: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
+    let nodes = graph["nodes"].as_array().unwrap();
+    let child = nodes.iter().find(|n| n["id"] == child_id).unwrap();
+    assert_eq!(child["parent_id"], group_id);
+}
+
+#[tokio::test]
+async fn post_node_invalid_parent_id_returns_error() {
+    let (cookie, project_id, _pool, app) = setup_user_and_project("invparent@example.com", "Password123").await;
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "parent_id": "nonexistent-id"
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid parent_id");
+}
+
+#[tokio::test]
+async fn post_node_parent_id_from_other_project_returns_error() {
+    let (cookie, project_id, pool, app) = setup_user_and_project("otherparent@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+    let org_id = user.organization_id.clone();
+
+    let other_project_id = ulid::Ulid::new().to_string();
+    let other_project = db::NewProject {
+        id: other_project_id.clone(),
+        title: "Other Project".to_string(),
+        user_id: user_id.clone(),
+        organization_id: org_id.clone(),
+    };
+    boardtask::app::db::projects::insert(&pool, &other_project).await.unwrap();
+
+    let other_node_id = ulid::Ulid::new().to_string();
+    let other_node = db::nodes::NewNode {
+        id: other_node_id.clone(),
+        project_id: other_project_id.clone(),
+        node_type_id: TASK_NODE_TYPE_ID.to_string(),
+        status_id: DEFAULT_STATUS_ID.to_string(),
+        title: "Other Node".to_string(),
+        description: None,
+        estimated_minutes: None,
+        slot_id: None,
+        parent_id: None,
+    };
+    boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "parent_id": other_node_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid parent_id");
+}
+
+#[tokio::test]
 async fn post_node_with_status_then_patch_and_get_graph() {
     let (cookie, project_id, _pool, app) = setup_user_and_project("statusflow@example.com", "Password123").await;
 
@@ -611,6 +745,196 @@ mod patch_node {
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(body["error"], "Invalid slot_id");
+    }
+
+    #[tokio::test]
+    async fn patch_node_set_parent_id_then_clear() {
+        let (cookie, project_id, _pool, app) = setup_user_and_project("patchparent@example.com", "Password123").await;
+
+        let post_group_req = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/nodes", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(
+                serde_json::json!({ "node_type_id": TASK_NODE_TYPE_ID, "title": "Group" }).to_string(),
+            ))
+            .unwrap();
+        let post_group_res = app.clone().oneshot(post_group_req).await.unwrap();
+        assert_eq!(post_group_res.status(), http::StatusCode::CREATED);
+        let group_body: serde_json::Value =
+            serde_json::from_slice(&post_group_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let group_id = group_body["id"].as_str().unwrap();
+
+        let post_child_req = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/nodes", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(
+                serde_json::json!({ "node_type_id": TASK_NODE_TYPE_ID, "title": "Child" }).to_string(),
+            ))
+            .unwrap();
+        let post_child_res = app.clone().oneshot(post_child_req).await.unwrap();
+        assert_eq!(post_child_res.status(), http::StatusCode::CREATED);
+        let child_body: serde_json::Value =
+            serde_json::from_slice(&post_child_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let child_id = child_body["id"].as_str().unwrap();
+
+        let patch_body = serde_json::json!({ "parent_id": group_id });
+        let patch_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, child_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let patch_response = app.clone().oneshot(patch_request).await.unwrap();
+        assert_eq!(patch_response.status(), http::StatusCode::OK);
+
+        let patch_res_bytes = patch_response.into_body().collect().await.unwrap().to_bytes();
+        let patch_res: serde_json::Value = serde_json::from_slice(&patch_res_bytes).unwrap();
+        assert_eq!(patch_res["parent_id"], group_id);
+
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.clone().oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let get_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
+        let nodes = graph["nodes"].as_array().unwrap();
+        let updated_node = nodes.iter().find(|n| n["id"] == child_id).unwrap();
+        assert_eq!(updated_node["parent_id"], group_id);
+
+        let clear_body = serde_json::json!({ "parent_id": null });
+        let clear_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, child_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(clear_body.to_string()))
+            .unwrap();
+
+        let clear_response = app.clone().oneshot(clear_request).await.unwrap();
+        assert_eq!(clear_response.status(), http::StatusCode::OK);
+
+        let clear_res_bytes = clear_response.into_body().collect().await.unwrap().to_bytes();
+        let clear_res: serde_json::Value = serde_json::from_slice(&clear_res_bytes).unwrap();
+        assert!(clear_res["parent_id"].is_null());
+
+        let get_request2 = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response2 = app.clone().oneshot(get_request2).await.unwrap();
+        let get_bytes2 = get_response2.into_body().collect().await.unwrap().to_bytes();
+        let graph2: serde_json::Value = serde_json::from_slice(&get_bytes2).unwrap();
+        let nodes2 = graph2["nodes"].as_array().unwrap();
+        let cleared_node = nodes2.iter().find(|n| n["id"] == child_id).unwrap();
+        assert!(cleared_node["parent_id"].is_null());
+    }
+
+    #[tokio::test]
+    async fn patch_node_invalid_parent_id_returns_400() {
+        let (cookie, project_id, pool, app) = setup_user_and_project("patchinvparent@example.com", "Password123").await;
+
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        let patch_body = serde_json::json!({ "parent_id": "nonexistent-id" });
+        let request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["error"], "Invalid parent_id");
+    }
+
+    #[tokio::test]
+    async fn patch_node_parent_id_from_other_project_returns_400() {
+        let (cookie, project_id, pool, app) = setup_user_and_project("patchotherparent@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
+        let org_id = user.organization_id.clone();
+
+        let project_node_id = ulid::Ulid::new().to_string();
+        let project_node = db::nodes::NewNode {
+            id: project_node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Project Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
+
+        let other_project_id = ulid::Ulid::new().to_string();
+        let other_project = db::NewProject {
+            id: other_project_id.clone(),
+            title: "Other Project".to_string(),
+            user_id: user_id.clone(),
+            organization_id: org_id.clone(),
+        };
+        boardtask::app::db::projects::insert(&pool, &other_project).await.unwrap();
+
+        let other_node_id = ulid::Ulid::new().to_string();
+        let other_node = db::nodes::NewNode {
+            id: other_node_id.clone(),
+            project_id: other_project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Other Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
+
+        let patch_body = serde_json::json!({ "parent_id": other_node_id });
+        let request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, project_node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["error"], "Invalid parent_id");
     }
 }
 
