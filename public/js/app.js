@@ -83,6 +83,62 @@ function buildNodeLabelHtml(data, opts) {
                             </div>`;
 }
 
+/**
+ * Returns a sort function for the Dagre layout so that root nodes stay in a stable order
+ * (by created_at) and do not reshuffle when adding a child under one epic. Dagre uses this
+ * order as the tie-breaker when defining topology; we assign each node a rootIndex from its
+ * root ancestor so the layout keeps roots fixed and only expands the relevant subtree.
+ * @param {object} cy - Cytoscape instance
+ * @returns {function} Comparator (a, b) for layout sort option
+ */
+function buildStableRootSort(cy) {
+    const nodes = cy.nodes();
+    if (nodes.length > 0) {
+        const roots = nodes.filter(n => n.incomers().length === 0);
+        const sortedRoots = roots.sort((a, b) => {
+            const ta = a.data('created_at') ?? 0;
+            const tb = b.data('created_at') ?? 0;
+            if (ta !== tb) return ta - tb;
+            return String(a.id()).localeCompare(String(b.id()));
+        });
+        const rootIdToIndex = {};
+        sortedRoots.forEach((r, i) => { rootIdToIndex[r.id()] = i; });
+
+        function getRootAncestorId(node, visited) {
+            if (visited.has(node.id())) return node.id();
+            visited.add(node.id());
+            const inEdges = node.incomers();
+            if (inEdges.length === 0) return node.id();
+            const parent = inEdges.first().source();
+            return getRootAncestorId(parent, visited);
+        }
+
+        nodes.forEach(node => {
+            const rootId = getRootAncestorId(node, new Set());
+            const idx = rootIdToIndex[rootId];
+            node.data('rootIndex', typeof idx === 'number' ? idx : 0);
+        });
+    }
+
+    return (a, b) => {
+        const ri = (el) => (el.isNode() ? (el.data('rootIndex') ?? 0) : 0);
+        const id = (el) => (el.isNode() ? el.id() : el.source().id() + '\0' + el.target().id());
+        if (a.isNode() && b.isNode()) {
+            const d = ri(a) - ri(b);
+            if (d !== 0) return d;
+            return String(a.id()).localeCompare(String(b.id()));
+        }
+        if (a.isEdge() && b.isEdge()) {
+            const ra = ri(a.source()) - ri(b.source());
+            if (ra !== 0) return ra;
+            const rb = ri(a.target()) - ri(b.target());
+            if (rb !== 0) return rb;
+            return String(id(a)).localeCompare(String(id(b)));
+        }
+        return a.isNode() ? -1 : 1;
+    };
+}
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -325,7 +381,8 @@ const registerGraph = () => {
                                 estimated_minutes: n.estimated_minutes ?? null,
                                 muted: !!muted,
                                 isGroup: isGroupNode,
-                                groupEmpty: isGroupNode ? false : undefined
+                                groupEmpty: isGroupNode ? false : undefined,
+                                created_at: n.created_at
                             }
                         };
                     }),
@@ -627,7 +684,8 @@ const registerGraph = () => {
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
                             estimated_minutes: node.estimated_minutes ?? null,
-                            muted: !!muted
+                            muted: !!muted,
+                            created_at: node.created_at
                         }
                     },
                     { group: 'edges', data: { source: parentId, target: node.id } }
@@ -688,7 +746,8 @@ const registerGraph = () => {
                             slot_id: node.slot_id ?? '',
                             slot_name: slot ? slot.name : '',
                             estimated_minutes: node.estimated_minutes ?? null,
-                            muted: false
+                            muted: false,
+                            created_at: node.created_at
                         }
                     },
                     { group: 'edges', data: { source: node.id, target: childId } }
@@ -961,7 +1020,9 @@ const registerGraph = () => {
         },
 
         runLayout(opts = {}) {
-            const layout = this.cy.layout({
+            const cy = this.cy;
+            const sort = buildStableRootSort(cy);
+            const layout = cy.layout({
                 name: 'dagre',
                 rankDir: this.layoutDirection,
                 nodeSep: 60,
@@ -969,12 +1030,13 @@ const registerGraph = () => {
                 ranker: 'tight-tree',
                 animate: true,
                 animationDuration: 500,
-                fit: !!opts.fit
+                fit: !!opts.fit,
+                sort
             });
 
             if (opts.fit) {
                 layout.one('layoutstop', () => {
-                    this.cy.animate({
+                    cy.animate({
                         fit: { padding: 50 },
                         duration: 300
                     });
