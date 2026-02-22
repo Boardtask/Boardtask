@@ -38,7 +38,16 @@
         <div class="px-6 mb-6">
             <div class="flex items-center justify-between text-sm text-gray-600 mb-1">
                 <span>Progress</span>
-                <span>To do: {{ todo_count }} · Blocked: {{ blocked_count }} · In progress: {{ in_progress_count }} · Done: {{ completed_count }}</span>
+                <span class="flex items-center gap-2 flex-wrap">
+                    <span>To do: {{ todo_count }} · Blocked: {{ blocked_count }} · In progress: {{ in_progress_count }}</span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-700 text-white border border-green-800">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>Done</span>
+                        <span class="font-semibold">{{ completed_count }}</span>
+                    </span>
+                </span>
             </div>
             <div class="text-sm text-gray-600 mb-1">
                 Estimated: {{ total_estimated_display }} · Left: {{ estimated_left_display }} · Completed: {{ estimated_completed_display }}

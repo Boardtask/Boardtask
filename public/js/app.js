@@ -31,6 +31,23 @@ function formatEstimatedMinutes(minutes) {
     return unit === 'hours' ? `${amount}h` : `${amount}m`;
 }
 
+/** Convert hex color to rgba string with given alpha (0–1). Handles #RGB and #RRGGBB. */
+function hexToRgba(hex, alpha) {
+    const m = String(hex).replace(/^#/, '').match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!m) return hex;
+    let r, g, b;
+    if (m[1].length === 3) {
+        r = parseInt(m[1][0] + m[1][0], 16);
+        g = parseInt(m[1][1] + m[1][1], 16);
+        b = parseInt(m[1][2] + m[1][2], 16);
+    } else {
+        r = parseInt(m[1].slice(0, 2), 16);
+        g = parseInt(m[1].slice(2, 4), 16);
+        b = parseInt(m[1].slice(4, 6), 16);
+    }
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
 /** Escape for safe use in HTML content and attribute values (prevents XSS). */
 function escapeHtml(str) {
     if (str == null) return '';
@@ -66,24 +83,32 @@ function buildNodeLabelHtml(data, opts) {
     const typeName = escapeHtml(data.node_type_name || 'Task');
     const typeColor = escapeHtml(data.node_type_color || '#4F46E5');
     const statusName = escapeHtml(data.status_name || '');
-    const statusHtml = statusName ? `<div class="cy-node__status">${statusName}</div>` : '';
+    const isDone = (data.status_id || '') === DONE_STATUS_ID;
+    const checkmarkSvg = '<svg class="cy-node__status-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>';
+    const statusHtml = isDone
+        ? `<div class="cy-node__status cy-node__status--done">${checkmarkSvg}<span>Done</span></div>`
+        : (statusName ? `<div class="cy-node__status">${statusName}</div>` : '');
     const slotName = escapeHtml(data.slot_name || '');
     const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName}">${slotName}</div>` : '';
     const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
     const estimateStr = escapeHtml(estimateStrRaw);
     const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
-    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name) ? ' cy-node--compact' : '';
+    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !isDone) ? ' cy-node--compact' : '';
     const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
     const filteredClass = (opts.filteredOut) ? ' cy-node--filtered' : '';
+    const doneClass = isDone ? ' cy-node--done' : '';
     const selectedClass = opts.selected ? ' cy-node--selected' : '';
     const label = escapeHtml(data.label ?? '');
-    return `<div class="cy-node${compactClass}${mutedClass}${filteredClass}${selectedClass}" style="border-color: ${typeColor}; border-left-color: ${typeColor};">
-                                <div class="cy-node__header">
-                                    <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
-                                    ${slotHtml}
+    const borderColor = isDone ? hexToRgba(typeColor, 0.4) : typeColor;
+    return `<div class="cy-node${compactClass}${mutedClass}${filteredClass}${doneClass}${selectedClass}" style="border-color: ${borderColor}; border-left-color: ${borderColor};">
+                                <div class="cy-node__content">
+                                    <div class="cy-node__header">
+                                        <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
+                                        ${slotHtml}
+                                    </div>
+                                    <div class="cy-node__label${isDone ? ' cy-node__label--done' : ''}">${label}</div>
+                                    <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
                                 </div>
-                                <div class="cy-node__label">${label}</div>
-                                <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
                             </div>`;
 }
 
