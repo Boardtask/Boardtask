@@ -556,6 +556,15 @@ const registerGraph = () => {
                 edge.select();
             });
 
+            this.cy.on('dbltap', 'node', (evt) => {
+                const node = evt.target;
+                const neighborhood = node.closedNeighborhood();
+                this.cy.animate({
+                    fit: { eles: neighborhood, padding: 100 },
+                    duration: 300
+                });
+            });
+
             const escapeHandler = (e) => {
                 if (e.key === 'Escape' && this.editingNode) this.requestCloseEditPanel();
             };
