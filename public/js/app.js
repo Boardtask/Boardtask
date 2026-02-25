@@ -1267,6 +1267,18 @@ const registerGraph = () => {
                 setTimeout(() => {
                     Alpine.store('projectFlash', { show: false, message: '' });
                 }, 3000);
+
+                // Sync original so we don't prompt again when closing
+                const n = this.editingNode;
+                this.editingNodeOriginal = {
+                    title: String(n.title ?? ''),
+                    description: String(n.description ?? ''),
+                    node_type_id: String(n.node_type_id ?? ''),
+                    status_id: String(n.status_id ?? ''),
+                    slot_id: String(n.slot_id ?? ''),
+                    estimated_amount: n.estimated_amount == null || n.estimated_amount === '' ? '' : String(n.estimated_amount),
+                    estimated_unit: String(n.estimated_unit || 'minutes')
+                };
             } catch (error) {
                 alert(`Error saving node: ${error.message}`);
             } finally {
