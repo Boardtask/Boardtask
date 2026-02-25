@@ -19,6 +19,21 @@ const TODO_STATUS_ID = '01JSTATUS00000000TODO0000';
 const IN_PROGRESS_STATUS_ID = '01JSTATUS00000000INPROG00';
 const DONE_STATUS_ID = '01JSTATUS00000000DONE0000';
 
+const SEMANTIC_COLORS = {
+    epic: '#9B6BCA',
+    task: '#5A8FF0',
+    bug: '#D65D5D',
+    success: '#6BAF92',
+    warning: '#D9A441'
+};
+
+function nodeTypeSlug(nodeTypeName) {
+    const n = (nodeTypeName || '').toLowerCase();
+    if (n === 'epic') return 'epic';
+    if (n === 'bug') return 'bug';
+    return 'task';
+}
+
 function minutesToAmountAndUnit(minutes) {
     if (minutes == null || minutes <= 0) return { amount: '', unit: 'minutes' };
     if (minutes >= 60 && minutes % 60 === 0) return { amount: minutes / 60, unit: 'hours' };
@@ -73,17 +88,19 @@ function buildNodeLabelHtml(data, opts) {
             const label = escapeHtml(data.label ?? 'New group');
             const selectedClass = opts.selected ? ' cy-node--selected' : '';
             const filteredClass = opts.filteredOut ? ' cy-node--filtered' : '';
-            return `<div class="cy-node cy-node--compact${selectedClass}${filteredClass}" style="border-color: #94A3B8; border-left-color: #94A3B8;">
+            return `<div class="cy-node cy-node--compact cy-node--task${selectedClass}${filteredClass}" style="border-color: #E5E1DA; border-left-color: #E5E1DA;">
                                 <div class="cy-node__header"><span class="cy-node__label" style="font-weight: 600;">${label}</span></div>
-                                <div class="cy-node__meta"><span class="cy-node__type text-xs" style="color: #94A3B8;">Group</span></div>
+                                <div class="cy-node__meta"><span class="cy-node__type text-xs" style="color: #888888;">Group</span></div>
                             </div>`;
         }
         return '';
     }
     const typeName = escapeHtml(data.node_type_name || 'Task');
-    const typeColor = escapeHtml(data.node_type_color || '#4F46E5');
+    const typeSlug = nodeTypeSlug(data.node_type_name);
+    const typeColor = SEMANTIC_COLORS[typeSlug] || SEMANTIC_COLORS.task;
     const statusName = escapeHtml(data.status_name || '');
     const isDone = (data.status_id || '') === DONE_STATUS_ID;
+    const isBlocked = (data.status_name || '').toLowerCase() === 'blocked';
     const checkmarkSvg = '<svg class="cy-node__status-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>';
     const statusHtml = isDone
         ? `<div class="cy-node__status cy-node__status--done">${checkmarkSvg}<span>Done</span></div>`
@@ -93,6 +110,8 @@ function buildNodeLabelHtml(data, opts) {
     const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
     const estimateStr = escapeHtml(estimateStrRaw);
     const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
+    const typeClass = ' cy-node--' + typeSlug;
+    const warningClass = isBlocked ? ' cy-node--warning' : '';
     const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !isDone) ? ' cy-node--compact' : '';
     const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
     const filteredClass = (opts.filteredOut) ? ' cy-node--filtered' : '';
@@ -100,7 +119,7 @@ function buildNodeLabelHtml(data, opts) {
     const selectedClass = opts.selected ? ' cy-node--selected' : '';
     const label = escapeHtml(data.label ?? '');
     const borderColor = isDone ? hexToRgba(typeColor, 0.4) : typeColor;
-    return `<div class="cy-node${compactClass}${mutedClass}${filteredClass}${doneClass}${selectedClass}" style="border-color: ${borderColor}; border-left-color: ${borderColor};">
+    return `<div class="cy-node${typeClass}${warningClass}${compactClass}${mutedClass}${filteredClass}${doneClass}${selectedClass}" style="border-color: ${borderColor}; border-left-color: ${borderColor};">
                                 <div class="cy-node__content">
                                     <div class="cy-node__header">
                                         <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
@@ -348,6 +367,14 @@ const registerGraph = () => {
         newSlotName: '',
         slotError: '',
         groupListVersion: 0,
+        toolbarMenu: null, // 'add' | 'filter' | 'group' | null
+
+        setToolbarMenu(menu) {
+            this.toolbarMenu = menu;
+        },
+        toggleToolbarMenu(menu) {
+            this.toolbarMenu = this.toolbarMenu === menu ? null : menu;
+        },
 
         isGroupNode(nodeOrId) {
             if (!this.cy) return false;
@@ -391,28 +418,34 @@ const registerGraph = () => {
                     {
                         selector: 'edge',
                         style: {
-                            'width': 2,
-                            'line-color': '#C7D2FE',
-                            'target-arrow-color': '#C7D2FE',
+                            'width': 1.5,
+                            'line-color': '#B8B0A6',
+                            'target-arrow-color': '#B8B0A6',
                             'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier'
+                            'curve-style': 'taxi',
+                            'taxi-direction': 'vertical',
+                            'taxi-turn': 5,
+                            'taxi-turn-min-distance': 100,
+                            'target-arrow-shape': 'triangle',
+                            'opacity': 0.7
                         }
                     },
                     {
                         selector: 'edge:selected',
                         style: {
-                            'width': 3,
-                            'line-color': '#6366F1',
-                            'target-arrow-color': '#6366F1'
+                            'width': 2,
+                            'line-color': '#5A8FF0',
+                            'target-arrow-color': '#5A8FF0',
+                            'opacity': 0.9
                         }
                     },
                     {
                         selector: ':parent',
                         style: {
                             'shape': 'rectangle',
-                            'background-color': '#F1F5F9',
+                            'background-color': 'rgba(255, 255, 255, 0.3)',
                             'border-width': 2,
-                            'border-color': '#94A3B8',
+                            'border-color': '#E5E1DA',
                             'padding': 20,
                             'border-opacity': 0.8,
                             'opacity': 1
@@ -421,7 +454,8 @@ const registerGraph = () => {
                     {
                         selector: 'node[isGroup]',
                         style: {
-                            'opacity': 1
+                            'opacity': 1,
+                            'background-color': '#f7f5f4'
                         }
                     }
                 ],
