@@ -1104,12 +1104,10 @@ const registerGraph = () => {
             const targetIsGroup = this.isGroupNode(targetId);
 
             try {
-                if (!sourceIsGroup && !targetIsGroup) {
-                    await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
-                        parent_id: sourceId,
-                        child_id: targetId
-                    });
-                }
+                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
+                    parent_id: sourceId,
+                    child_id: targetId
+                });
 
                 this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
                 this.runLayout();
@@ -1127,12 +1125,10 @@ const registerGraph = () => {
                 const n1IsGroup = this.isGroupNode(n1);
                 const n2IsGroup = this.isGroupNode(n2);
                 try {
-                    if (!n1IsGroup && !n2IsGroup) {
-                        await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
-                            parent_id: n1,
-                            child_id: n2
-                        });
-                    }
+                    await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
+                        parent_id: n1,
+                        child_id: n2
+                    });
                     this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
                     this.selectedEdge = null;
                     this.runLayout();
@@ -1152,12 +1148,10 @@ const registerGraph = () => {
             const n2IsGroup = this.isGroupNode(n2);
 
             try {
-                if (!n1IsGroup && !n2IsGroup) {
-                    await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
-                        parent_id: n1,
-                        child_id: n2
-                    });
-                }
+                await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
+                    parent_id: n1,
+                    child_id: n2
+                });
 
                 this.cy.edges().filter(e => e.source().id() === n1 && e.target().id() === n2).remove();
                 this.runLayout();
