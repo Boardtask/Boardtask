@@ -836,6 +836,8 @@ const registerGraph = () => {
             });
             this.groupListVersion++;
             this.runLayout({ fit: true });
+            this.cy.nodes().unselect();
+            this.cy.$id(id).select();
         },
 
         async addSelectedToGroup(groupId) {
