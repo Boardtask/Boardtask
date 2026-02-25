@@ -942,6 +942,8 @@ const registerGraph = () => {
         async addChildNode() {
             if (this.selectedNodeIds.length === 0) return;
             const parentId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
+            const parentNode = this.cy.$id(parentId);
+            const groupId = parentNode.length && parentNode.parent().length ? parentNode.parent().id() : null;
 
             try {
                 const title = DEFAULTS.NODE_TITLE;
@@ -949,7 +951,8 @@ const registerGraph = () => {
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
                     node_type_id: this.nodeTypeId,
                     title: title,
-                    description: ""
+                    description: "",
+                    ...(groupId && { parent_id: groupId })
                 });
 
                 await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
@@ -960,7 +963,6 @@ const registerGraph = () => {
                 const type = this.nodeTypes.find(t => t.id === node.node_type_id);
                 const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
                 const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
-                const parentNode = this.cy.$id(parentId);
                 const isParentRoot = parentNode.incomers().length === 0;
                 const parentDone = (parentNode.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
                 const newNodeDone = (node.status_id ?? DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
@@ -972,6 +974,7 @@ const registerGraph = () => {
                         group: 'nodes',
                         data: {
                             id: node.id,
+                            parent: groupId || undefined,
                             label: node.title,
                             description: node.description,
                             node_type_id: node.node_type_id,
