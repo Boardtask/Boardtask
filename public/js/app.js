@@ -461,10 +461,12 @@ const registerGraph = () => {
                 ],
                 elements: [], // Initialized as empty, fetched via API
                 layout: {
-                    name: 'dagre',
-                    rankDir: this.layoutDirection,
-                    nodeSep: 60,
-                    rankSep: 100
+                    name: 'klay',
+                    padding: 20,
+                    klay: {
+                        direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
+                        spacing: 60
+                    }
                 }
             });
 
@@ -1413,17 +1415,19 @@ const registerGraph = () => {
 
         runLayout(opts = {}) {
             const cy = this.cy;
-            const sort = buildStableRootSort(cy);
             const layout = cy.layout({
-                name: 'dagre',
-                rankDir: this.layoutDirection,
-                nodeSep: 60,
-                rankSep: 100,
-                ranker: 'tight-tree',
+                name: 'klay',
                 animate: true,
                 animationDuration: 500,
                 fit: !!opts.fit,
-                sort
+                padding: 20,
+                klay: {
+                    direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
+                    spacing: 60,
+                    layoutHierarchy: true,
+                    mergeEdges: true,
+                    nodeLayering: 'LONGEST_PATH'
+                }
             });
 
             if (opts.fit) {
