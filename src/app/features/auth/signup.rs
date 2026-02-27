@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::State,
+    extract::{Query, State},
     response::{Html, IntoResponse, Redirect},
     Form, routing::get, Router,
 };
@@ -17,6 +17,21 @@ use crate::app::{
     AppState, APP_NAME,
 };
 
+/// Query params for GET /signup (e.g. from invite flow).
+#[derive(Debug, Deserialize)]
+pub struct SignupQuery {
+    pub email: Option<String>,
+    pub next: Option<String>,
+}
+
+/// Safe redirect path: only allow relative paths starting with / to avoid open redirect.
+fn safe_redirect_next(next: Option<String>) -> String {
+    match next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n,
+        _ => String::new(),
+    }
+}
+
 /// Signup form data from HTTP request.
 #[derive(Debug, Deserialize, Validate)]
 pub struct SignupForm {
@@ -28,6 +43,9 @@ pub struct SignupForm {
 
     #[validate(must_match(other = "password"))]
     pub confirm_password: String,
+
+    /// Redirect path after verify (from invite flow). Optional, not validated here.
+    pub next: Option<String>,
 }
 
 /// Signup page template.
@@ -37,6 +55,8 @@ pub struct SignupTemplate {
     pub app_name: &'static str,
     pub error: String,
     pub email: String,
+    /// Safe next URL for hidden form field (empty if not set).
+    pub next: String,
 }
 
 /// Create a new user account and verification token. Returns (user_id, token) on success.
@@ -98,12 +118,15 @@ async fn create_account(
     Ok((user_id, token))
 }
 
-/// GET /signup — Show signup form.
-pub async fn show() -> SignupTemplate {
+/// GET /signup — Show signup form. Accepts ?email= and ?next= (e.g. from invite).
+pub async fn show(Query(query): Query<SignupQuery>) -> SignupTemplate {
+    let email = query.email.unwrap_or_default();
+    let next = safe_redirect_next(query.next);
     SignupTemplate {
         app_name: APP_NAME,
         error: String::new(),
-        email: String::new(),
+        email,
+        next,
     }
 }
 
@@ -113,12 +136,14 @@ pub async fn submit(
     jar: CookieJar,
     Form(form): Form<SignupForm>,
 ) -> Result<impl IntoResponse, Html<String>> {
+    let next = safe_redirect_next(form.next.clone());
     // Validate form structure
     if let Err(_) = form.validate() {
         let template = SignupTemplate {
             app_name: APP_NAME,
             error: "Invalid form data".to_string(),
             email: form.email.clone(),
+            next: next.clone(),
         };
         return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
     }
@@ -131,6 +156,7 @@ pub async fn submit(
                 app_name: APP_NAME,
                 error: "Invalid email address".to_string(),
                 email: form.email.clone(),
+                next: next.clone(),
             };
             return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
         }
@@ -143,6 +169,7 @@ pub async fn submit(
                 app_name: APP_NAME,
                 error: e.message.unwrap_or_else(|| "Invalid password".into()).to_string(),
                 email: form.email.clone(),
+                next: next.clone(),
             };
             return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
         }
@@ -151,19 +178,40 @@ pub async fn submit(
     // Create account
     match create_account(&state.db, &email, &password).await {
         Ok((_user_id, token)) => {
-            let url = format!("{}/verify-email?token={}", state.config.app_url_base(), token);
+            let verify_path = if next.is_empty() {
+                format!("/verify-email?token={}", token)
+            } else {
+                format!(
+                    "/verify-email?token={}&next={}",
+                    token,
+                    urlencoding::encode(&next)
+                )
+            };
+            let url = format!("{}{}", state.config.app_url_base(), verify_path);
             match state.mail.send(&EmailMessage::new(
                 email.clone(),
                 "Verify your email".to_string(),
                 format!("Click here to verify your account: {}", url),
                 state.config.mail_from.clone(),
             )).await {
-                Ok(()) => Ok((jar, Redirect::to(&format!("/check-email?email={}", email.as_str())))),
+                Ok(()) => {
+                    let redirect_to = if next.is_empty() {
+                        format!("/check-email?email={}", urlencoding::encode(email.as_str()))
+                    } else {
+                        format!(
+                            "/check-email?email={}&next={}",
+                            urlencoding::encode(email.as_str()),
+                            urlencoding::encode(&next)
+                        )
+                    };
+                    Ok((jar, Redirect::to(&redirect_to)))
+                }
                 Err(_) => {
                     let template = SignupTemplate {
                         app_name: APP_NAME,
                         error: "Failed to send verification email.".to_string(),
                         email: form.email.clone(),
+                        next: next.clone(),
                     };
                     Err(Html(template.render().map_err(|_| "Template error".to_string())?))
                 }
@@ -174,6 +222,7 @@ pub async fn submit(
                 app_name: APP_NAME,
                 error: msg,
                 email: form.email.clone(),
+                next: next.clone(),
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }
@@ -182,6 +231,7 @@ pub async fn submit(
                 app_name: APP_NAME,
                 error: "Internal server error".to_string(),
                 email: form.email.clone(),
+                next: next.clone(),
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }

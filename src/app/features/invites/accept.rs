@@ -3,16 +3,15 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
-    Form, Router,
+    Router,
 };
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
-use validator::Validate;
 
 use crate::app::{
     db,
-    domain::{Email, OrganizationId, OrganizationRole, Password, HashedPassword, UserId},
+    domain::{Email, OrganizationId, OrganizationRole, UserId},
     session::{self, AuthenticatedSession},
     AppState, APP_NAME,
 };
@@ -23,18 +22,18 @@ pub struct AcceptInviteQuery {
     pub token: Option<String>,
 }
 
-/// Accept invite page: invalid/expired, new user signup form, or existing user login prompt.
+/// Accept invite page: invalid/expired, new user (signup/login links), or existing user login prompt.
 #[derive(Template)]
 #[template(path = "accept_invite.html")]
 pub struct AcceptInviteTemplate {
     pub app_name: &'static str,
     /// Set when invite is invalid or expired.
     pub invalid_message: String,
-    /// Set when new user signup form is shown.
+    /// Set when new user: org name and links to signup/login.
     pub new_user_org_name: String,
     pub new_user_email: String,
-    pub new_user_token: String,
-    pub new_user_error: String,
+    pub new_user_signup_url: String,
+    pub new_user_login_url: String,
     /// Set when existing user should log in.
     pub existing_org_name: String,
     pub existing_login_url: String,
@@ -46,8 +45,8 @@ pub enum AcceptInviteState {
     NewUser {
         org_name: String,
         email: String,
-        token: String,
-        error: String,
+        signup_url: String,
+        login_url: String,
     },
     ExistingUser {
         org_name: String,
@@ -63,23 +62,23 @@ impl AcceptInviteTemplate {
                 invalid_message: message,
                 new_user_org_name: String::new(),
                 new_user_email: String::new(),
-                new_user_token: String::new(),
-                new_user_error: String::new(),
+                new_user_signup_url: String::new(),
+                new_user_login_url: String::new(),
                 existing_org_name: String::new(),
                 existing_login_url: String::new(),
             },
             AcceptInviteState::NewUser {
                 org_name,
                 email,
-                token,
-                error,
+                signup_url,
+                login_url,
             } => AcceptInviteTemplate {
                 app_name,
                 invalid_message: String::new(),
                 new_user_org_name: org_name,
                 new_user_email: email,
-                new_user_token: token,
-                new_user_error: error,
+                new_user_signup_url: signup_url,
+                new_user_login_url: login_url,
                 existing_org_name: String::new(),
                 existing_login_url: String::new(),
             },
@@ -91,8 +90,8 @@ impl AcceptInviteTemplate {
                 invalid_message: String::new(),
                 new_user_org_name: String::new(),
                 new_user_email: String::new(),
-                new_user_token: String::new(),
-                new_user_error: String::new(),
+                new_user_signup_url: String::new(),
+                new_user_login_url: String::new(),
                 existing_org_name: org_name,
                 existing_login_url: login_url,
             },
@@ -100,17 +99,7 @@ impl AcceptInviteTemplate {
     }
 }
 
-/// Form for POST /accept-invite (new user signup with invite).
-#[derive(Debug, Deserialize, Validate)]
-pub struct AcceptInviteForm {
-    pub token: String,
-    #[validate(length(min = 8, max = 128))]
-    pub password: String,
-    #[validate(must_match(other = "password"))]
-    pub confirm_password: String,
-}
-
-/// GET /accept-invite — Show invite state: error, signup form (new user), or login link (existing user).
+/// GET /accept-invite — Show invite state: error, signup/login links (new user), or login link (existing user).
 pub async fn show(
     State(state): State<AppState>,
     Query(query): Query<AcceptInviteQuery>,
@@ -184,11 +173,20 @@ pub async fn show(
             login_url,
         }
     } else {
+        let login_url = format!(
+            "/login?next={}",
+            urlencoding::encode(&format!("/accept-invite/confirm?token={}", urlencoding::encode(&token)))
+        );
+        let signup_url = format!(
+            "/signup?email={}&next={}",
+            urlencoding::encode(&invite.email),
+            urlencoding::encode(&format!("/accept-invite/confirm?token={}", urlencoding::encode(&token)))
+        );
         AcceptInviteState::NewUser {
             org_name: org.name,
             email: invite.email,
-            token,
-            error: String::new(),
+            signup_url,
+            login_url,
         }
     };
 
@@ -196,152 +194,6 @@ pub async fn show(
     Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response()
 }
 
-/// POST /accept-invite — Create account for new user with invite, add to org, log in, redirect to /app.
-pub async fn submit_new_user(
-    State(state): State<AppState>,
-    jar: CookieJar,
-    Form(form): Form<AcceptInviteForm>,
-) -> Response {
-    if form.validate().is_err() {
-        let invite = match db::organization_invites::find_by_token(&state.db, &form.token).await {
-            Ok(Some(inv)) => inv,
-            _ => {
-                let tmpl = AcceptInviteTemplate::from_state(
-                    APP_NAME,
-                    AcceptInviteState::InvalidExpired {
-                        message: "Invalid or expired invite.".to_string(),
-                    },
-                );
-                return Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response();
-            }
-        };
-        let org_name = match OrganizationId::from_string(&invite.organization_id) {
-            Ok(id) => db::organizations::find_by_id(&state.db, &id)
-                .await
-                .ok()
-                .flatten()
-                .map(|o| o.name)
-                .unwrap_or_else(|| "Organization".to_string()),
-            Err(_) => "Organization".to_string(),
-        };
-        let tmpl = AcceptInviteTemplate::from_state(
-            APP_NAME,
-            AcceptInviteState::NewUser {
-                org_name,
-                email: invite.email,
-                token: form.token,
-                error: "Password must be 8–128 characters and match confirmation.".to_string(),
-            },
-        );
-        return Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response();
-    }
-
-    let invite = match db::organization_invites::find_by_token(&state.db, &form.token).await {
-        Ok(Some(inv)) => inv,
-        Ok(None) => {
-            let tmpl = AcceptInviteTemplate::from_state(
-                APP_NAME,
-                AcceptInviteState::InvalidExpired {
-                    message: "This invite is invalid or has expired.".to_string(),
-                },
-            );
-            return Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response();
-        }
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
-    };
-
-    let email = match Email::new(invite.email.clone()) {
-        Ok(e) => e,
-        Err(_) => return (axum::http::StatusCode::BAD_REQUEST, "Invalid invite email".to_string()).into_response(),
-    };
-
-    if db::find_by_email(&state.db, &email).await.ok().flatten().is_some() {
-        let tmpl = AcceptInviteTemplate::from_state(
-            APP_NAME,
-            AcceptInviteState::ExistingUser {
-                org_name: "Organization".to_string(),
-                login_url: "/login".to_string(),
-            },
-        );
-        return Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response();
-    }
-
-    let password = match Password::new(form.password) {
-        Ok(p) => p,
-        Err(e) => {
-            let msg = e.message.as_deref().unwrap_or("Invalid password");
-            let org_name = match OrganizationId::from_string(&invite.organization_id) {
-                Ok(id) => db::organizations::find_by_id(&state.db, &id)
-                    .await
-                    .ok()
-                    .flatten()
-                    .map(|o| o.name)
-                    .unwrap_or_else(|| "Organization".to_string()),
-                Err(_) => "Organization".to_string(),
-            };
-            let tmpl = AcceptInviteTemplate::from_state(
-                APP_NAME,
-                AcceptInviteState::NewUser {
-                    org_name,
-                    email: invite.email,
-                    token: form.token,
-                    error: msg.to_string(),
-                },
-            );
-            return Html(tmpl.render().unwrap_or_else(|_| "Template error".to_string())).into_response();
-        }
-    };
-
-    let password_hash = match HashedPassword::from_password(&password) {
-        Ok(h) => h,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Password hashing failed".to_string()).into_response(),
-    };
-
-    let user_id = UserId::new();
-    let org_id = match OrganizationId::from_string(&invite.organization_id) {
-        Ok(id) => id,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Invalid organization".to_string()).into_response(),
-    };
-
-    let role = invite.role.parse::<OrganizationRole>().unwrap_or(OrganizationRole::Member);
-
-    let new_user = db::NewUser {
-        id: user_id.clone(),
-        email: email.clone(),
-        password_hash,
-        organization_id: org_id.clone(),
-    };
-
-    let mut tx = match state.db.begin().await {
-        Ok(t) => t,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response(),
-    };
-
-    if db::users::insert(&mut *tx, &new_user).await.is_err() {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to create account".to_string()).into_response();
-    }
-    if db::organizations::add_member(&mut *tx, &org_id, &user_id, role).await.is_err() {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to add to organization".to_string()).into_response();
-    }
-    if db::organization_invites::delete_by_id(&mut *tx, &invite.id).await.is_err() {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to complete invite".to_string()).into_response();
-    }
-    if tx.commit().await.is_err() {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response();
-    }
-
-    // Mark email verified so they can log in (they came via invite link).
-    let _ = db::users::mark_verified(&state.db, &user_id).await;
-
-    let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
-    let session_id = match db::sessions::create(&state.db, &user_id, &org_id, expires_at).await {
-        Ok(s) => s,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to create session".to_string()).into_response(),
-    };
-
-    let jar = jar.add(session::session_cookie(session_id));
-    (jar, Redirect::to("/app")).into_response()
-}
 
 /// Query for GET /accept-invite/confirm.
 #[derive(Debug, Deserialize)]
@@ -423,6 +275,6 @@ pub async fn confirm_existing_user(
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/accept-invite", get(show).post(submit_new_user))
+        .route("/accept-invite", get(show))
         .route("/accept-invite/confirm", get(confirm_existing_user))
 }

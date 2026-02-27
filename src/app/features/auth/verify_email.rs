@@ -17,6 +17,16 @@ use crate::app::{
 #[derive(Debug, Deserialize)]
 pub struct VerifyQuery {
     pub token: String,
+    /// Optional redirect after verify (e.g. /accept-invite/confirm?token=...).
+    pub next: Option<String>,
+}
+
+/// Safe redirect path: only allow relative paths starting with / to avoid open redirect.
+fn safe_redirect_next(next: Option<String>) -> String {
+    match next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n,
+        _ => "/app".to_string(),
+    }
 }
 
 #[derive(Template)]
@@ -32,6 +42,10 @@ pub struct CheckEmailTemplate {
     pub app_name: &'static str,
     pub email: String,
     pub sent: bool,
+    /// Safe next URL for resend form (empty if not set).
+    pub next: String,
+    /// Login link: either "/login" or "/login?next=..." (next already URL-encoded).
+    pub login_url: String,
 }
 
 /// Error type for verify-email route. Renders HTML instead of JSON.
@@ -86,18 +100,34 @@ async fn verify_user(db: &sqlx::SqlitePool, token: &str) -> Result<String, AppEr
     Ok(session_id)
 }
 
+/// Safe redirect path for check-email: only allow relative paths starting with /.
+fn safe_next(next: Option<&String>) -> String {
+    match next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n.clone(),
+        _ => String::new(),
+    }
+}
+
 /// GET /check-email — Shown after signup. Display email for user to check.
 pub async fn check_email_page(Query(params): Query<std::collections::HashMap<String, String>>) -> CheckEmailTemplate {
     let email = params.get("email").cloned().unwrap_or_else(|| "your email".to_string());
     let sent = params.get("sent").map(|s| s == "1").unwrap_or(false);
+    let next = safe_next(params.get("next"));
+    let login_url = if next.is_empty() {
+        "/login".to_string()
+    } else {
+        format!("/login?next={}", urlencoding::encode(&next))
+    };
     CheckEmailTemplate {
         app_name: APP_NAME,
         email,
         sent,
+        next,
+        login_url,
     }
 }
 
-/// GET /verify-email?token=... — Validate token, mark user verified, create session, redirect to /app.
+/// GET /verify-email?token=... — Validate token, mark user verified, create session, redirect to next or /app.
 async fn verify(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -111,7 +141,8 @@ async fn verify(
         .await
         .map_err(VerifyError::from)?;
 
-    Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to("/app")))
+    let redirect_to = safe_redirect_next(query.next);
+    Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to(&redirect_to)))
 }
 
 pub fn routes() -> Router<AppState> {

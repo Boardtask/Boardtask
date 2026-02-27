@@ -43,6 +43,22 @@ pub async fn find_valid_token(
     Ok(row.and_then(|s| UserId::from_string(&s).ok()))
 }
 
+/// Find a valid verification token for a user (e.g. for tests). Returns the token string if found.
+pub async fn find_token_for_user(
+    pool: &sqlx::SqlitePool,
+    user_id: &UserId,
+) -> Result<Option<String>, sqlx::Error> {
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let row = sqlx::query_scalar::<_, String>(
+        "SELECT token FROM email_verification_tokens WHERE user_id = ? AND expires_at > ?",
+    )
+    .bind(user_id.as_str())
+    .bind(now)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row)
+}
+
 /// Delete all verification tokens for a user (used before resending a new link).
 pub async fn delete_tokens_for_user<'e, E>(executor: E, user_id: &UserId) -> Result<(), sqlx::Error>
 where

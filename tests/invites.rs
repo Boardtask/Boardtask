@@ -16,12 +16,13 @@ fn invite_form_body(email: &str, role: &str) -> String {
     )
 }
 
-fn accept_invite_form_body(token: &str, password: &str, confirm_password: &str) -> String {
+fn signup_form_body_with_next(email: &str, password: &str, confirm_password: &str, next: &str) -> String {
     format!(
-        "token={}&password={}&confirm_password={}",
-        urlencoding::encode(token),
+        "email={}&password={}&confirm_password={}&next={}",
+        urlencoding::encode(email),
         urlencoding::encode(password),
-        urlencoding::encode(confirm_password)
+        urlencoding::encode(confirm_password),
+        urlencoding::encode(next)
     )
 }
 
@@ -85,6 +86,83 @@ async fn create_invite_as_owner_succeeds_and_creates_db_row() {
 }
 
 #[tokio::test]
+async fn accept_invite_new_user_get_shows_signup_link_no_password_form() {
+    let (cookie, _project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(
+        &pool,
+        &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+    )
+    .await
+    .unwrap()
+    .expect("user exists");
+    let org_id = boardtask::app::domain::OrganizationId::from_string(&user.organization_id).unwrap();
+
+    let invite_id = boardtask::app::domain::UserId::new().as_str();
+    let token = boardtask::app::domain::UserId::new().as_str();
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let invite = boardtask::app::db::organization_invites::NewOrganizationInvite {
+        id: invite_id.to_string(),
+        organization_id: org_id.clone(),
+        email: "newbie@example.com".to_string(),
+        role: boardtask::app::domain::OrganizationRole::Member,
+        invited_by_user_id: boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+        token: token.to_string(),
+        expires_at: now + 86400 * 7,
+        created_at: now,
+    };
+    boardtask::app::db::organization_invites::insert(&pool, &invite).await.unwrap();
+
+    let request = http::Request::builder()
+        .method("GET")
+        .uri(&format!("/accept-invite?token={}", urlencoding::encode(&token)))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), http::StatusCode::OK);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_str = String::from_utf8_lossy(&body_bytes);
+    assert!(
+        body_str.contains("/signup?"),
+        "Expected signup URL in body, got: {}",
+        body_str
+    );
+    assert!(
+        body_str.contains("newbie@example.com") || body_str.contains("newbie%40example.com"),
+        "Expected invite email in signup link, got: {}",
+        body_str
+    );
+    assert!(
+        body_str.contains("accept-invite/confirm") || body_str.contains("accept-invite%2Fconfirm"),
+        "Expected next=confirm in signup link, got: {}",
+        body_str
+    );
+    assert!(
+        !body_str.contains("name=\"password\""),
+        "Expected no password form for new user, got: {}",
+        body_str
+    );
+}
+
+#[tokio::test]
+async fn accept_invite_post_returns_method_not_allowed() {
+    let pool = test_pool().await;
+    let app = test_router(pool);
+
+    let body = "token=abc&password=Password123&confirm_password=Password123";
+    let request = http::Request::builder()
+        .method("POST")
+        .uri("/accept-invite")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), http::StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
 async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
     let (cookie, _project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
@@ -113,33 +191,65 @@ async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
     };
     boardtask::app::db::organization_invites::insert(&pool, &invite).await.unwrap();
 
-    let body = accept_invite_form_body(&token, "Password123", "Password123");
-    let request = http::Request::builder()
+    // New flow: signup with next → verify-email → confirm
+    let next = format!("/accept-invite/confirm?token={}", urlencoding::encode(&token));
+    let signup_body = signup_form_body_with_next("newbie@example.com", "Password123", "Password123", &next);
+    let signup_request = http::Request::builder()
         .method("POST")
-        .uri("/accept-invite")
+        .uri("/signup")
         .header("content-type", "application/x-www-form-urlencoded")
-        .body(axum::body::Body::from(body))
+        .body(axum::body::Body::from(signup_body))
         .unwrap();
-    let response = app.clone().oneshot(request).await.unwrap();
-
-    assert_eq!(response.status(), http::StatusCode::SEE_OTHER);
-    assert_eq!(
-        response.headers().get("location").map(|v| v.to_str().unwrap()),
-        Some("/app")
-    );
-    let set_cookie = response
-        .headers()
-        .get("set-cookie")
-        .expect("expected Set-Cookie")
-        .to_str()
-        .unwrap();
-    assert!(set_cookie.contains("session_id="));
+    let signup_response = app.clone().oneshot(signup_request).await.unwrap();
+    assert_eq!(signup_response.status(), http::StatusCode::SEE_OTHER);
+    let location = signup_response.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("");
+    assert!(location.contains("/check-email"), "Expected redirect to check-email, got: {}", location);
 
     let email = boardtask::app::domain::Email::new("newbie@example.com".to_string()).unwrap();
-    let new_user = boardtask::app::db::find_by_email(&pool, &email).await.unwrap().expect("user created");
-    assert_eq!(new_user.organization_id, org_id.as_str());
-
+    let new_user = boardtask::app::db::find_by_email(&pool, &email).await.unwrap().expect("user created by signup");
     let new_user_id = boardtask::app::domain::UserId::from_string(&new_user.id).unwrap();
+    let verify_token = boardtask::app::db::email_verification::find_token_for_user(&pool, &new_user_id)
+        .await
+        .unwrap()
+        .expect("verification token exists");
+
+    let verify_url = format!(
+        "/verify-email?token={}&next={}",
+        verify_token,
+        urlencoding::encode(&format!("/accept-invite/confirm?token={}", urlencoding::encode(&token)))
+    );
+    let verify_request = http::Request::builder()
+        .method("GET")
+        .uri(&verify_url)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let verify_response = app.clone().oneshot(verify_request).await.unwrap();
+    assert_eq!(verify_response.status(), http::StatusCode::SEE_OTHER);
+    let verify_location = verify_response.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("");
+    assert!(
+        verify_location.contains("accept-invite/confirm"),
+        "Expected redirect to confirm, got: {}",
+        verify_location
+    );
+    let set_cookie = verify_response.headers().get("set-cookie").expect("Set-Cookie").to_str().unwrap();
+    let new_cookie = set_cookie.split(';').next().unwrap_or("").to_string();
+
+    let confirm_request = http::Request::builder()
+        .method("GET")
+        .uri(verify_location.to_string())
+        .header("cookie", &new_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let confirm_response = app.clone().oneshot(confirm_request).await.unwrap();
+    assert_eq!(confirm_response.status(), http::StatusCode::SEE_OTHER);
+    assert_eq!(
+        confirm_response.headers().get("location").map(|v| v.to_str().unwrap()),
+        Some("/app")
+    );
+
+    let new_user_after = boardtask::app::db::find_by_email(&pool, &email).await.unwrap().expect("user exists");
+    assert_eq!(new_user_after.organization_id, org_id.as_str());
+
     let is_member = boardtask::app::db::organizations::is_member(&pool, &org_id, &new_user_id).await.unwrap();
     assert!(is_member);
 
@@ -175,24 +285,63 @@ async fn accept_invite_as_new_user_then_app_accessible() {
     };
     boardtask::app::db::organization_invites::insert(&pool, &invite).await.unwrap();
 
-    let body = accept_invite_form_body(&token, "Password123", "Password123");
-    let request = http::Request::builder()
+    // New flow: signup with next → verify-email → confirm
+    let next = format!("/accept-invite/confirm?token={}", urlencoding::encode(&token));
+    let signup_body = signup_form_body_with_next("teammate@example.com", "Password123", "Password123", &next);
+    let signup_request = http::Request::builder()
         .method("POST")
-        .uri("/accept-invite")
+        .uri("/signup")
         .header("content-type", "application/x-www-form-urlencoded")
-        .body(axum::body::Body::from(body))
+        .body(axum::body::Body::from(signup_body))
         .unwrap();
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), http::StatusCode::SEE_OTHER);
+    let signup_response = app.clone().oneshot(signup_request).await.unwrap();
+    assert_eq!(signup_response.status(), http::StatusCode::SEE_OTHER);
 
-    let set_cookie = response.headers().get("set-cookie").unwrap().to_str().unwrap();
+    let email = boardtask::app::domain::Email::new("teammate@example.com".to_string()).unwrap();
+    let new_user = boardtask::app::db::find_by_email(&pool, &email).await.unwrap().expect("user created by signup");
+    let new_user_id = boardtask::app::domain::UserId::from_string(&new_user.id).unwrap();
+    let verify_token = boardtask::app::db::email_verification::find_token_for_user(&pool, &new_user_id)
+        .await
+        .unwrap()
+        .expect("verification token exists");
+
+    let verify_url = format!(
+        "/verify-email?token={}&next={}",
+        verify_token,
+        urlencoding::encode(&format!("/accept-invite/confirm?token={}", urlencoding::encode(&token)))
+    );
+    let verify_request = http::Request::builder()
+        .method("GET")
+        .uri(&verify_url)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let verify_response = app.clone().oneshot(verify_request).await.unwrap();
+    assert_eq!(verify_response.status(), http::StatusCode::SEE_OTHER);
+    let verify_location = verify_response.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let set_cookie = verify_response.headers().get("set-cookie").expect("Set-Cookie").to_str().unwrap();
     let new_cookie = set_cookie.split(';').next().unwrap_or("").to_string();
+
+    let confirm_request = http::Request::builder()
+        .method("GET")
+        .uri(verify_location.to_string())
+        .header("cookie", &new_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let confirm_response = app.oneshot(confirm_request).await.unwrap();
+    assert_eq!(confirm_response.status(), http::StatusCode::SEE_OTHER);
+
+    let cookie_after_confirm = confirm_response
+        .headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(';').next().unwrap_or("").to_string())
+        .unwrap_or(new_cookie);
 
     let app2 = test_router(pool.clone());
     let list_request = http::Request::builder()
         .method("GET")
         .uri("/app/projects")
-        .header("cookie", &new_cookie)
+        .header("cookie", &cookie_after_confirm)
         .body(axum::body::Body::empty())
         .unwrap();
     let list_response = app2.clone().oneshot(list_request).await.unwrap();
@@ -209,7 +358,7 @@ async fn accept_invite_as_new_user_then_app_accessible() {
     let show_request = http::Request::builder()
         .method("GET")
         .uri(&format!("/app/projects/{}", project_id))
-        .header("cookie", &new_cookie)
+        .header("cookie", &cookie_after_confirm)
         .body(axum::body::Body::empty())
         .unwrap();
     let show_response = app2.oneshot(show_request).await.unwrap();

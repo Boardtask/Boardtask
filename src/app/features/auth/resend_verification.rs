@@ -21,6 +21,8 @@ use crate::app::{
 pub struct ResendVerificationForm {
     #[validate(length(min = 1, max = 254), email)]
     pub email: String,
+    /// Optional redirect after verify (from check-email page). Not validated.
+    pub next: Option<String>,
 }
 
 /// Resend verification page template.
@@ -74,6 +76,12 @@ pub async fn submit(
     };
 
     let email_str = email.as_str().to_string();
+
+    // Safe redirect path: only allow relative paths starting with /
+    let safe_next = match &form.next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n.clone(),
+        _ => String::new(),
+    };
 
     // Rate limit: 1 per 60 seconds per email
     let should_send = {
@@ -140,7 +148,16 @@ pub async fn submit(
                     Html(t.render().unwrap_or_else(|_| "Template error".into()))
                 })?;
 
-                let url = format!("{}/verify-email?token={}", state.config.app_url_base(), token);
+                let url = if safe_next.is_empty() {
+                    format!("{}/verify-email?token={}", state.config.app_url_base(), token)
+                } else {
+                    format!(
+                        "{}/verify-email?token={}&next={}",
+                        state.config.app_url_base(),
+                        token,
+                        urlencoding::encode(&safe_next)
+                    )
+                };
 
                 let _ = state.mail.send(&EmailMessage::new(
                     email.clone(),
@@ -158,9 +175,25 @@ pub async fn submit(
     };
 
     let redirect_url = if sent {
-        format!("/check-email?email={}&sent=1", urlencoding::encode(&form.email))
+        if safe_next.is_empty() {
+            format!("/check-email?email={}&sent=1", urlencoding::encode(&form.email))
+        } else {
+            format!(
+                "/check-email?email={}&sent=1&next={}",
+                urlencoding::encode(&form.email),
+                urlencoding::encode(&safe_next)
+            )
+        }
     } else {
-        format!("/check-email?email={}", urlencoding::encode(&form.email))
+        if safe_next.is_empty() {
+            format!("/check-email?email={}", urlencoding::encode(&form.email))
+        } else {
+            format!(
+                "/check-email?email={}&next={}",
+                urlencoding::encode(&form.email),
+                urlencoding::encode(&safe_next)
+            )
+        }
     };
 
     Ok(Redirect::to(&redirect_url))
