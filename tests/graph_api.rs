@@ -1559,9 +1559,6 @@ async fn post_edge_404_when_node_not_in_project() {
         for e in edges {
             let p = e["parent_id"].as_str().unwrap();
             let c = e["child_id"].as_str().unwrap();
-            if p == body["project_id"].as_str().unwrap() {
-                // skip any project-level edges (none expected here)
-            }
             if p == parent_node.id && c == new_node_id {
                 has_parent_to_new = true;
             }
