@@ -46,7 +46,7 @@
         </div>
 
         <!-- Edit Node Side Drawer (same fields as graph view) -->
-        <div class="side-drawer" :class="{ 'side-drawer--open': editingNode }">
+        <div class="side-drawer side-drawer--node-details" :class="{ 'side-drawer--open': editingNode }">
             <div class="side-drawer__header">
                 <h3>Edit Task</h3>
                 <button @click="requestCloseEditPanel()" class="side-drawer__close">

@@ -1094,6 +1094,7 @@ Scale: 0, px, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16,
 5. TYPOGRAPHY — Font size
 ========================================================================== */
 .text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-10 { font-size: 10px; }
 .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
 .text-base { font-size: 1rem; line-height: 1.5rem; }
 .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
@@ -3263,11 +3264,11 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 .cy-node__label { font-family: inherit; font-size: 13px; font-weight: 600; text-align: left; pointer-events: none; line-height: 1.4; min-height: 2.8em; white-space: normal; overflow: hidden; text-overflow: ellipsis; width: 100%; color: #4A4A4A; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
 .cy-node__label--done { text-decoration: line-through; color: #888888; }
 .cy-node__meta { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 2px; gap: 8px; }
-.cy-node__status { font-size: 10px; color: #888888; }
+.cy-node__status { }
 .cy-node__status--done { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; background-color: #6BAF92; color: #ffffff; border: 1px solid rgba(107, 175, 146, 0.3); }
 .cy-node__status--done .cy-node__status-check { width: 12px; height: 12px; color: #ffffff; flex-shrink: 0; }
-.cy-node__slot { font-size: 10px; color: #888888; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; flex: 1 1 0; }
-.cy-node__estimate { font-size: 10px; color: #888888; }
+.cy-node__slot { }
+.cy-node__estimate { }
 .cy-node--done { background: #fcfbfb; }
 .cy-node__content { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; height: 100%; min-width: 0; }
 .cy-node--done .cy-node__content { opacity: 0.4; }
@@ -3296,6 +3297,7 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
   flex-direction: column;
 }
 .side-drawer--open { transform: translateX(-20px); }
+.side-drawer--node-details .side-drawer__content label { display: block; font-family: var(--font-sans); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; }
 .side-drawer__header {
   padding: 1.25rem;
   border-bottom: 1px solid #E5E1DA;

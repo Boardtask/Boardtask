@@ -166,12 +166,12 @@ function buildNodeLabelHtml(data, opts) {
     const checkmarkSvg = '<svg class="cy-node__status-check" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>';
     const statusHtml = isDone
         ? `<div class="cy-node__status cy-node__status--done">${checkmarkSvg}<span>Done</span></div>`
-        : (statusName ? `<div class="cy-node__status">${statusName}</div>` : '');
+        : (statusName ? `<div class="cy-node__status block text-10 font-sans font-bold text-taupe">${statusName}</div>` : '');
     const slotName = escapeHtml(data.slot_name || '');
-    const slotHtml = slotName ? `<div class="cy-node__slot" title="${slotName}">${slotName}</div>` : '';
+    const slotHtml = slotName ? `<div class="cy-node__slot block text-10 font-sans font-bold text-taupe min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right flex-1" title="${slotName}">${slotName}</div>` : '';
     const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
     const estimateStr = escapeHtml(estimateStrRaw);
-    const estimateHtml = estimateStr ? `<div class="cy-node__estimate">${estimateStr}</div>` : '';
+    const estimateHtml = estimateStr ? `<div class="cy-node__estimate block text-10 font-sans font-bold text-taupe">${estimateStr}</div>` : '';
     const typeClass = ' cy-node--' + typeSlug;
     const warningClass = isBlocked ? ' cy-node--warning' : '';
     const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !isDone) ? ' cy-node--compact' : '';

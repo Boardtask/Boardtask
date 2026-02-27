@@ -199,7 +199,7 @@
             </div>
 
             <!-- Side Drawer (Node Details) -->
-            <div class="side-drawer" :class="{ 'side-drawer--open': editingNode }">
+            <div class="side-drawer side-drawer--node-details" :class="{ 'side-drawer--open': editingNode }">
                 <div class="side-drawer__header">
                     <h3 x-text="editingNode && editingNode.isGroup ? 'Edit Group' : 'Node Details'"></h3>
                     <button @click="requestCloseEditPanel()" class="side-drawer__close">
