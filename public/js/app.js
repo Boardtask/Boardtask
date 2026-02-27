@@ -677,19 +677,7 @@ const registerGraph = () => {
                 const data = await response.json();
 
                 const groupIds = new Set(data.nodes.map(n => n.parent_id).filter(Boolean));
-                const parentIdsById = {};
-                data.edges.forEach(e => {
-                    if (!parentIdsById[e.child_id]) parentIdsById[e.child_id] = [];
-                    parentIdsById[e.child_id].push(e.parent_id);
-                });
-                const statusById = {};
-                data.nodes.forEach(n => { statusById[n.id] = n.status_id ?? DEFAULTS.STATUS_ID; });
                 const isRoot = (id) => !data.edges.some(e => e.child_id === id);
-                const isDone = (id) => (statusById[id] || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
-                const hasBlockingParent = (id) => {
-                    const pids = parentIdsById[id] || [];
-                    return pids.some(pid => !isRoot(pid) && !isDone(pid));
-                };
 
                 const elements = [
                     ...data.nodes.map(n => {
@@ -697,8 +685,7 @@ const registerGraph = () => {
                         const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         const slot = this.projectSlots.find(s => s.id === (n.slot_id || ''));
                         const root = isRoot(n.id);
-                        const done = isDone(n.id);
-                        const muted = !root && !done && hasBlockingParent(n.id);
+                        const muted = !root;
                         const isGroupNode = groupIds.has(n.id);
                         const statusId = n.status_id ?? DEFAULTS.STATUS_ID;
                         const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
@@ -740,27 +727,12 @@ const registerGraph = () => {
 
         recomputeMutedForGraph() {
             const cy = this.cy;
-            const parentIdsById = {};
-            cy.edges().forEach(edge => {
-                const childId = edge.target().id();
-                const parentId = edge.source().id();
-                if (!parentIdsById[childId]) parentIdsById[childId] = [];
-                parentIdsById[childId].push(parentId);
-            });
-            const statusById = {};
-            cy.nodes().forEach(node => { statusById[node.id()] = node.data('status_id') || DEFAULTS.STATUS_ID; });
             const isRoot = (id) => !cy.edges().some(e => e.target().id() === id);
-            const isDone = (id) => (statusById[id] || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
-            const hasBlockingParent = (id) => {
-                const pids = parentIdsById[id] || [];
-                return pids.some(pid => !isRoot(pid) && !isDone(pid));
-            };
             cy.nodes().forEach(node => {
                 const id = node.id();
                 const root = isRoot(id);
-                const done = isDone(id);
-                const muted = !root && !done && hasBlockingParent(id);
-                node.data('muted', !!muted);
+                const muted = !root;
+                node.data('muted', muted);
             });
             try {
                 const nh = cy.nodeHtmlLabel && cy.nodeHtmlLabel();
@@ -1015,7 +987,8 @@ const registerGraph = () => {
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
-                    groupId
+                    groupId,
+                    mutedOverride: true
                 });
                 this.cy.add([
                     cyNode,
@@ -1213,7 +1186,8 @@ const registerGraph = () => {
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
-                    groupId
+                    groupId,
+                    mutedOverride: true
                 });
 
                 this.cy.add([
