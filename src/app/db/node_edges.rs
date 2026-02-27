@@ -37,6 +37,29 @@ where
     Ok(())
 }
 
+/// Insert a new node edge into the database, ignoring the insert when the edge
+/// already exists (no error is returned in that case).
+pub async fn insert_if_not_exists<'e, E>(
+    executor: E,
+    edge: &NewNodeEdge,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+
+    sqlx::query(
+        "INSERT OR IGNORE INTO node_edges (parent_id, child_id, created_at) VALUES (?, ?, ?)",
+    )
+    .bind(&edge.parent_id)
+    .bind(&edge.child_id)
+    .bind(now)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+
 /// Delete a node edge by parent and child IDs using a pooled connection.
 pub async fn delete(
     pool: &sqlx::SqlitePool,

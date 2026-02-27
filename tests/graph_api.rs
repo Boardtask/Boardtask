@@ -522,6 +522,284 @@ async fn post_node_with_status_then_patch_and_get_graph() {
     let nodes = graph["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == node_id).unwrap();
     assert_eq!(node["status_id"], STATUS_ID_DONE);
+        }
+
+    #[tokio::test]
+    async fn delete_middle_node_rewires_chain() {
+        let (cookie, project_id, pool, app) =
+            setup_user_and_project("deletemiddle@example.com", "Password123").await;
+
+        // Create three nodes A, B, C in the project.
+        let a_id = ulid::Ulid::new().to_string();
+        let b_id = ulid::Ulid::new().to_string();
+        let c_id = ulid::Ulid::new().to_string();
+
+        let a = db::nodes::NewNode {
+            id: a_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "A".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        let b = db::nodes::NewNode {
+            id: b_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "B".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        let c = db::nodes::NewNode {
+            id: c_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "C".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+
+        boardtask::app::db::nodes::insert(&pool, &a).await.unwrap();
+        boardtask::app::db::nodes::insert(&pool, &b).await.unwrap();
+        boardtask::app::db::nodes::insert(&pool, &c).await.unwrap();
+
+        // Create edges A -> B and B -> C.
+        let ab = db::node_edges::NewNodeEdge {
+            parent_id: a_id.clone(),
+            child_id: b_id.clone(),
+        };
+        let bc = db::node_edges::NewNodeEdge {
+            parent_id: b_id.clone(),
+            child_id: c_id.clone(),
+        };
+        boardtask::app::db::node_edges::insert(&pool, &ab).await.unwrap();
+        boardtask::app::db::node_edges::insert(&pool, &bc).await.unwrap();
+
+        // Delete middle node B via API.
+        let delete_request = http::Request::builder()
+            .method("DELETE")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, b_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let delete_response = app.clone().oneshot(delete_request).await.unwrap();
+        assert_eq!(delete_response.status(), http::StatusCode::NO_CONTENT);
+
+        // Fetch graph and assert B is gone, edges A->B and B->C are gone, A->C exists.
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let graph_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value =
+            serde_json::from_slice(&graph_bytes).unwrap();
+
+        let nodes = graph["nodes"].as_array().unwrap();
+        assert!(
+            nodes.iter().all(|n| n["id"] != b_id),
+            "middle node B should be deleted from graph nodes",
+        );
+
+        let edges = graph["edges"].as_array().unwrap();
+        let mut has_a_b = false;
+        let mut has_b_c = false;
+        let mut has_a_c = false;
+        for e in edges {
+            let p = e["parent_id"].as_str().unwrap();
+            let c = e["child_id"].as_str().unwrap();
+            if p == a_id && c == b_id {
+                has_a_b = true;
+            }
+            if p == b_id && c == c_id {
+                has_b_c = true;
+            }
+            if p == a_id && c == c_id {
+                has_a_c = true;
+            }
+        }
+
+        assert!(
+            !has_a_b && !has_b_c,
+            "edges A->B and B->C should be removed",
+        );
+        assert!(has_a_c, "edge A->C should be created after deleting B");
+    }
+
+    #[tokio::test]
+    async fn delete_node_with_multiple_parents_and_children_rewires_all() {
+        let (cookie, project_id, pool, app) =
+            setup_user_and_project("deletemulti@example.com", "Password123").await;
+
+        // Parents P1, P2; children C1, C2; middle node M.
+        let p1_id = ulid::Ulid::new().to_string();
+        let p2_id = ulid::Ulid::new().to_string();
+        let m_id = ulid::Ulid::new().to_string();
+        let c1_id = ulid::Ulid::new().to_string();
+        let c2_id = ulid::Ulid::new().to_string();
+
+        for (id, title) in [
+            (&p1_id, "P1"),
+            (&p2_id, "P2"),
+            (&m_id, "M"),
+            (&c1_id, "C1"),
+            (&c2_id, "C2"),
+        ] {
+            let node = db::nodes::NewNode {
+                id: id.to_string(),
+                project_id: project_id.clone(),
+                node_type_id: TASK_NODE_TYPE_ID.to_string(),
+                status_id: DEFAULT_STATUS_ID.to_string(),
+                title: title.to_string(),
+                description: None,
+                estimated_minutes: None,
+                slot_id: None,
+                parent_id: None,
+            };
+            boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+        }
+
+        // P1 -> M, P2 -> M, M -> C1, M -> C2.
+        let edges = [
+            db::node_edges::NewNodeEdge {
+                parent_id: p1_id.clone(),
+                child_id: m_id.clone(),
+            },
+            db::node_edges::NewNodeEdge {
+                parent_id: p2_id.clone(),
+                child_id: m_id.clone(),
+            },
+            db::node_edges::NewNodeEdge {
+                parent_id: m_id.clone(),
+                child_id: c1_id.clone(),
+            },
+            db::node_edges::NewNodeEdge {
+                parent_id: m_id.clone(),
+                child_id: c2_id.clone(),
+            },
+        ];
+        for edge in &edges {
+            boardtask::app::db::node_edges::insert(&pool, edge)
+                .await
+                .unwrap();
+        }
+
+        // Delete middle node M.
+        let delete_request = http::Request::builder()
+            .method("DELETE")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, m_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let delete_response = app.clone().oneshot(delete_request).await.unwrap();
+        assert_eq!(delete_response.status(), http::StatusCode::NO_CONTENT);
+
+        // Fetch graph and assert rewiring P{1,2} -> C{1,2}.
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let graph_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value =
+            serde_json::from_slice(&graph_bytes).unwrap();
+
+        let nodes = graph["nodes"].as_array().unwrap();
+        assert!(
+            nodes.iter().all(|n| n["id"] != m_id),
+            "middle node M should be deleted from graph nodes",
+        );
+
+        let edges = graph["edges"].as_array().unwrap();
+        let mut expected_pairs = std::collections::HashSet::from([
+            (p1_id.as_str(), c1_id.as_str()),
+            (p1_id.as_str(), c2_id.as_str()),
+            (p2_id.as_str(), c1_id.as_str()),
+            (p2_id.as_str(), c2_id.as_str()),
+        ]);
+        for e in edges {
+            let p = e["parent_id"].as_str().unwrap();
+            let c = e["child_id"].as_str().unwrap();
+            expected_pairs.remove(&(p, c));
+            // Ensure no edge still involves M.
+            assert_ne!(p, m_id);
+            assert_ne!(c, m_id);
+        }
+
+        assert!(
+            expected_pairs.is_empty(),
+            "all parent->child combinations should exist after delete",
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_isolated_node_does_not_create_edges() {
+        let (cookie, project_id, pool, app) =
+            setup_user_and_project("deleteisolated@example.com", "Password123").await;
+
+        // Create a single isolated node.
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Isolated".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        // Delete the node.
+        let delete_request = http::Request::builder()
+            .method("DELETE")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let delete_response = app.clone().oneshot(delete_request).await.unwrap();
+        assert_eq!(delete_response.status(), http::StatusCode::NO_CONTENT);
+
+        // Fetch graph and ensure node is gone and no edges exist.
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let graph_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value =
+            serde_json::from_slice(&graph_bytes).unwrap();
+
+        let nodes = graph["nodes"].as_array().unwrap();
+        assert!(
+            nodes.iter().all(|n| n["id"] != node_id),
+            "isolated node should be deleted from graph nodes",
+        );
+        let edges = graph["edges"].as_array().unwrap();
+        assert!(
+            edges.is_empty(),
+            "no edges should be present after deleting isolated node",
+        );
     }
 }
 

@@ -156,3 +156,21 @@ pub async fn delete(
 
     Ok(())
 }
+
+/// Delete a node by ID using a generic executor (e.g. transaction).
+pub async fn delete_with_executor<'e, E>(
+    executor: E,
+    id: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query(
+        "DELETE FROM nodes WHERE id = ?",
+    )
+    .bind(id)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}

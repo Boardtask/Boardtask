@@ -25,13 +25,8 @@ pub struct ProjectShowTemplate {
     pub todo_count: i64,
     pub in_progress_count: i64,
     pub completed_count: i64,
-    pub total_count: i64,
     pub blocked_count: i64,
-    pub blocked_todo_count: i64,
-    pub blocked_in_progress_count: i64,
-    pub total_estimated_display: String,
     pub estimated_left_display: String,
-    pub estimated_completed_display: String,
 }
 
 /// GET /app/projects/:id — Show project detail.
@@ -61,7 +56,6 @@ pub async fn show(
 
     let task_nodes = helpers::task_nodes_from_nodes(&nodes);
 
-    let total_count = task_nodes.len() as i64;
     let todo_count = task_nodes
         .iter()
         .filter(|n| n.status_id == db::task_statuses::TODO_STATUS_ID)
@@ -75,10 +69,10 @@ pub async fn show(
         .filter(|n| n.status_id == db::task_statuses::DONE_STATUS_ID)
         .count() as i64;
 
-    let (blocked_count, blocked_todo_count, blocked_in_progress_count) =
-        progress::count_blocked(&nodes, &edges);
+    let (blocked_count, _, _) = progress::count_blocked(&nodes, &edges);
 
-    let total_estimated_minutes: i64 = task_nodes.iter().filter_map(|n| n.estimated_minutes).sum();
+    let total_estimated_minutes: i64 =
+        task_nodes.iter().filter_map(|n| n.estimated_minutes).sum();
     let estimated_completed_minutes: i64 = task_nodes
         .iter()
         .filter(|n| n.status_id == db::task_statuses::DONE_STATUS_ID)
@@ -86,9 +80,8 @@ pub async fn show(
         .sum();
     let estimated_left_minutes = total_estimated_minutes.saturating_sub(estimated_completed_minutes);
 
-    let total_estimated_display = format::format_estimated_minutes(total_estimated_minutes);
-    let estimated_left_display = format::format_estimated_minutes(estimated_left_minutes);
-    let estimated_completed_display = format::format_estimated_minutes(estimated_completed_minutes);
+    let estimated_left_display =
+        format::format_estimated_minutes(estimated_left_minutes);
 
     ProjectShowTemplate {
         app_name: APP_NAME,
@@ -96,13 +89,8 @@ pub async fn show(
         todo_count,
         in_progress_count,
         completed_count,
-        total_count,
         blocked_count,
-        blocked_todo_count,
-        blocked_in_progress_count,
-        total_estimated_display,
         estimated_left_display,
-        estimated_completed_display,
     }
     .into_response()
 }

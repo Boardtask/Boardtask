@@ -19,7 +19,12 @@ pub async fn delete_node(
     Path(params): Path<super::types::NodePathParams>,
 ) -> Result<StatusCode, AppError> {
     // Validate org membership on every write
-    let _project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
+    let _project = super::helpers::ensure_project_accessible(
+        &state.db,
+        &params.project_id,
+        &session.user_id,
+    )
+    .await?;
 
     // Load the existing node
     let node = db::nodes::find_by_id(&state.db, &params.id)
@@ -31,8 +36,38 @@ pub async fn delete_node(
         return Err(AppError::NotFound("Node not found".to_string()));
     }
 
-    // Delete the node
-    db::nodes::delete(&state.db, &node.id).await?;
+    // Load parents and children of this node (before we delete it).
+    let parents =
+        db::node_edges::find_parents_of(&state.db, &node.id).await?;
+    let children =
+        db::node_edges::find_children_of(&state.db, &node.id).await?;
+
+    // Transactionally: rewire edges between parents and children, then delete the node.
+    let mut tx = state.db.begin().await.map_err(AppError::Database)?;
+
+    // For each parent/child pair, create an edge parent -> child, skipping self-loops.
+    for parent_id in &parents {
+        for child_id in &children {
+            if parent_id == child_id {
+                continue;
+            }
+
+            let edge = db::node_edges::NewNodeEdge {
+                parent_id: parent_id.clone(),
+                child_id: child_id.clone(),
+            };
+
+            db::node_edges::insert_if_not_exists(&mut *tx, &edge)
+                .await
+                .map_err(AppError::Database)?;
+        }
+    }
+
+    db::nodes::delete_with_executor(&mut *tx, &node.id)
+        .await
+        .map_err(AppError::Database)?;
+
+    tx.commit().await.map_err(AppError::Database)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
