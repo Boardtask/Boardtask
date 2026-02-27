@@ -35,7 +35,7 @@ function nodeTypeSlug(nodeTypeName) {
 }
 
 function minutesToAmountAndUnit(minutes) {
-    if (minutes == null || minutes <= 0) return { amount: '', unit: 'minutes' };
+    if (minutes == null || minutes <= 0) return { amount: '', unit: 'hours' };
     if (minutes >= 60 && minutes % 60 === 0) return { amount: minutes / 60, unit: 'hours' };
     return { amount: minutes, unit: 'minutes' };
 }
@@ -269,7 +269,7 @@ const registerGraph = () => {
                 status_id: String(this.editingNode.status_id ?? ''),
                 slot_id: String(this.editingNode.slot_id ?? ''),
                 estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
-                estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                estimated_unit: String(this.editingNode.estimated_unit || 'hours')
             };
         },
 
@@ -320,7 +320,7 @@ const registerGraph = () => {
             if (!this.editingNode || this.saving) return;
             this.saving = true;
             const amount = this.editingNode.estimated_amount;
-            const unit = this.editingNode.estimated_unit || 'minutes';
+            const unit = this.editingNode.estimated_unit || 'hours';
             let estimatedMinutes = null;
             if (amount !== '' && amount != null && !Number.isNaN(Number(amount))) {
                 const n = Number(amount);
@@ -554,7 +554,7 @@ const registerGraph = () => {
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
-                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                    estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
 
                 if (this.selectedNodeIds.length > 2) {
@@ -1016,7 +1016,7 @@ const registerGraph = () => {
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
-                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                    estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
             } catch (error) {
                 alert(`Error adding child node: ${error.message}`);
@@ -1090,7 +1090,7 @@ const registerGraph = () => {
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
-                    estimated_unit: String(this.editingNode.estimated_unit || 'minutes')
+                    estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
             } catch (error) {
                 alert(`Error adding parent node: ${error.message}`);
@@ -1223,7 +1223,7 @@ const registerGraph = () => {
             this.saving = true;
 
             const amount = this.editingNode.estimated_amount;
-            const unit = this.editingNode.estimated_unit || 'minutes';
+            const unit = this.editingNode.estimated_unit || 'hours';
             let estimatedMinutes = null;
             if (amount !== '' && amount != null && !Number.isNaN(Number(amount))) {
                 const n = Number(amount);
@@ -1273,7 +1273,7 @@ const registerGraph = () => {
                     status_id: String(n.status_id ?? ''),
                     slot_id: String(n.slot_id ?? ''),
                     estimated_amount: n.estimated_amount == null || n.estimated_amount === '' ? '' : String(n.estimated_amount),
-                    estimated_unit: String(n.estimated_unit || 'minutes')
+                    estimated_unit: String(n.estimated_unit || 'hours')
                 };
             } catch (error) {
                 alert(`Error saving node: ${error.message}`);
