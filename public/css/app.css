@@ -80,6 +80,16 @@ input,
 button,
 textarea,
 select { font-family: inherit; font-size: inherit; }
+input,
+textarea,
+select {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.16px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
 a { color: inherit; text-decoration: inherit; }
 img,
 svg,
@@ -2708,6 +2718,10 @@ Scale: 0, px, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16,
   border-radius: 0.375rem;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: -0.16px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
   color: var(--text-primary);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
