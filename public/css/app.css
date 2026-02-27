@@ -3320,7 +3320,17 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
   align-items: center;
   background: rgba(255, 255, 255, 0.3);
 }
-.side-drawer__header h3 { margin: 0; font-size: 1.125rem; font-weight: 600; color: #4A4A4A; }
+.side-drawer__header h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  line-height: 20px;
+  color: rgb(74, 74, 74);
+  text-transform: uppercase;
+  -webkit-font-smoothing: antialiased;
+}
 .side-drawer__content { flex: 1; padding: 1.25rem; overflow-y: auto; }
 .side-drawer__footer {
   padding: 1.25rem;
