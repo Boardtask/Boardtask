@@ -132,6 +132,13 @@
                     aria-label="Disconnect" title="Disconnect">
                     <span class="material-symbols-outlined text-xl">link_off</span>
                 </button>
+                <!-- Insert between -->
+                <button type="button" @click="insertBetweenNodes()" :disabled="!selectedEdge"
+                    :class="selectedEdge ? 'text-charcoal hover:shadow text-taupe' : 'text-taupe opacity-50 cursor-not-allowed'"
+                    class="flex items-center justify-center w-9 h-9 rounded-full transition shrink-0 border-0 shadow-sm bg-transparent"
+                    aria-label="Insert node between" title="Insert node between">
+                    <span class="material-symbols-outlined text-xl">fork_right</span>
+                </button>
                 <div class="h-6 w-px bg-beige-border mx-1 shrink-0"></div>
                 <!-- Filter menu -->
                 <div class="relative">

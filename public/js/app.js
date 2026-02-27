@@ -46,6 +46,66 @@ function formatEstimatedMinutes(minutes) {
     return unit === 'hours' ? `${amount}h` : `${amount}m`;
 }
 
+/**
+ * Build a Cytoscape node element for a graph node response, including
+ * lookup of type/status/slot, muted (blocked) state, and progress filtering.
+ * Muted can be overridden explicitly; otherwise it is derived from the parent node.
+ */
+function buildCyNodeElement(node, options) {
+    const {
+        nodeTypes,
+        taskStatuses,
+        projectSlots,
+        progressFilter,
+        matchesProgressFilter,
+        parentNode = null,
+        groupId = null,
+        mutedOverride = null
+    } = options;
+
+    const type = nodeTypes.find(t => t.id === node.node_type_id);
+    const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
+    const status = taskStatuses.find(s => s.id === statusId);
+    const slot = projectSlots.find(s => s.id === (node.slot_id || ''));
+
+    let muted;
+    if (mutedOverride != null) {
+        muted = !!mutedOverride;
+    } else if (parentNode && parentNode.length) {
+        const isParentRoot = parentNode.incomers().length === 0;
+        const parentDone = (parentNode.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
+        const newNodeDone = statusId === DONE_STATUS_ID;
+        muted = !newNodeDone && !isParentRoot && !parentDone;
+    } else {
+        muted = false;
+    }
+
+    const filteredOut = progressFilter
+        ? !matchesProgressFilter(statusId)
+        : false;
+
+    return {
+        group: 'nodes',
+        data: {
+            id: node.id,
+            parent: groupId || undefined,
+            label: node.title,
+            description: node.description,
+            node_type_id: node.node_type_id,
+            node_type_name: type ? type.name : '',
+            node_type_color: type ? type.color : '#4F46E5',
+            status_id: statusId,
+            status_name: status ? status.name : 'To do',
+            slot_id: node.slot_id ?? '',
+            slot_name: slot ? slot.name : '',
+            estimated_minutes: node.estimated_minutes ?? null,
+            muted: !!muted,
+            filteredOut: !!filteredOut,
+            created_at: node.created_at
+        }
+    };
+}
+
 /** Convert hex color to rgba string with given alpha (0–1). Handles #RGB and #RRGGBB. */
 function hexToRgba(hex, alpha) {
     const m = String(hex).replace(/^#/, '').match(/^([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -789,29 +849,15 @@ const registerGraph = () => {
                     description: ""
                 });
 
-                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
-                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
-                const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
-                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
-                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
-                this.cy.add({
-                    group: 'nodes',
-                    data: {
-                        id: node.id,
-                        label: node.title,
-                        description: node.description,
-                        node_type_id: node.node_type_id,
-                        node_type_name: type ? type.name : '',
-                        status_id: statusId,
-                        status_name: status ? status.name : 'To do',
-                        node_type_color: type ? type.color : '#4F46E5',
-                        slot_id: node.slot_id ?? '',
-                        slot_name: slot ? slot.name : '',
-                        estimated_minutes: node.estimated_minutes ?? null,
-                        muted: false,
-                        filteredOut: !!filteredOut
-                    }
+                const cyNode = buildCyNodeElement(node, {
+                    nodeTypes: this.nodeTypes,
+                    taskStatuses: this.taskStatuses,
+                    projectSlots: this.projectSlots,
+                    progressFilter: this.progressFilter,
+                    matchesProgressFilter: this.matchesProgressFilter.bind(this),
+                    mutedOverride: false
                 });
+                this.cy.add(cyNode);
                 this.runLayout({ fit: true });
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
@@ -962,36 +1008,17 @@ const registerGraph = () => {
                     child_id: node.id
                 });
 
-                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
-                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
-                const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
-                const isParentRoot = parentNode.incomers().length === 0;
-                const parentDone = (parentNode.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
-                const newNodeDone = (node.status_id ?? DEFAULTS.STATUS_ID) === DONE_STATUS_ID;
-                const muted = !newNodeDone && !isParentRoot && !parentDone;
-                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
-                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
+                const cyNode = buildCyNodeElement(node, {
+                    nodeTypes: this.nodeTypes,
+                    taskStatuses: this.taskStatuses,
+                    projectSlots: this.projectSlots,
+                    progressFilter: this.progressFilter,
+                    matchesProgressFilter: this.matchesProgressFilter.bind(this),
+                    parentNode,
+                    groupId
+                });
                 this.cy.add([
-                    {
-                        group: 'nodes',
-                        data: {
-                            id: node.id,
-                            parent: groupId || undefined,
-                            label: node.title,
-                            description: node.description,
-                            node_type_id: node.node_type_id,
-                            node_type_name: type ? type.name : '',
-                            node_type_color: type ? type.color : '#4F46E5',
-                            status_id: statusId,
-                            status_name: status ? status.name : 'To do',
-                            slot_id: node.slot_id ?? '',
-                            slot_name: slot ? slot.name : '',
-                            estimated_minutes: node.estimated_minutes ?? null,
-                            muted: !!muted,
-                            filteredOut: !!filteredOut,
-                            created_at: node.created_at
-                        }
-                    },
+                    cyNode,
                     { group: 'edges', data: { source: parentId, target: node.id } }
                 ]);
                 this.runLayout();
@@ -1041,31 +1068,16 @@ const registerGraph = () => {
                     child_id: childId
                 });
 
-                const type = this.nodeTypes.find(t => t.id === node.node_type_id);
-                const status = this.taskStatuses.find(s => s.id === (node.status_id ?? DEFAULTS.STATUS_ID));
-                const slot = this.projectSlots.find(s => s.id === (node.slot_id || ''));
-                const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
-                const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
+                const cyNode = buildCyNodeElement(node, {
+                    nodeTypes: this.nodeTypes,
+                    taskStatuses: this.taskStatuses,
+                    projectSlots: this.projectSlots,
+                    progressFilter: this.progressFilter,
+                    matchesProgressFilter: this.matchesProgressFilter.bind(this),
+                    mutedOverride: false
+                });
                 this.cy.add([
-                    {
-                        group: 'nodes',
-                        data: {
-                            id: node.id,
-                            label: node.title,
-                            description: node.description,
-                            node_type_id: node.node_type_id,
-                            node_type_name: type ? type.name : '',
-                            node_type_color: type ? type.color : '#4F46E5',
-                            status_id: statusId,
-                            status_name: status ? status.name : 'To do',
-                            slot_id: node.slot_id ?? '',
-                            slot_name: slot ? slot.name : '',
-                            estimated_minutes: node.estimated_minutes ?? null,
-                            muted: false,
-                            filteredOut: !!filteredOut,
-                            created_at: node.created_at
-                        }
-                    },
+                    cyNode,
                     { group: 'edges', data: { source: node.id, target: childId } }
                 ]);
                 this.runLayout();
@@ -1162,6 +1174,83 @@ const registerGraph = () => {
                 }
             } catch (error) {
                 alert(`Error disconnecting nodes: ${error.message}`);
+            }
+        },
+
+        async insertBetweenNodes() {
+            if (!this.selectedEdge) return;
+
+            const { sourceId, targetId } = this.selectedEdge;
+            const parentNode = this.cy ? this.cy.$id(sourceId) : null;
+            const childNode = this.cy ? this.cy.$id(targetId) : null;
+
+            if (!parentNode || !childNode || parentNode.length === 0 || childNode.length === 0) {
+                return;
+            }
+
+            // Use the child's compound parent (group) for the new node, if any.
+            const groupId = childNode.parent().length ? childNode.parent().id() : null;
+
+            try {
+                const title = DEFAULTS.NODE_TITLE;
+
+                const node = await this.api(`/api/projects/${this.projectId}/edges/insert-between`, 'POST', {
+                    parent_id: sourceId,
+                    child_id: targetId,
+                    node_type_id: this.nodeTypeId,
+                    title: title,
+                    description: "",
+                    group_id: groupId
+                });
+
+                // Remove the original edge and add the new node + edges.
+                this.cy.edges().filter(e => e.source().id() === sourceId && e.target().id() === targetId).remove();
+
+                const cyNode = buildCyNodeElement(node, {
+                    nodeTypes: this.nodeTypes,
+                    taskStatuses: this.taskStatuses,
+                    projectSlots: this.projectSlots,
+                    progressFilter: this.progressFilter,
+                    matchesProgressFilter: this.matchesProgressFilter.bind(this),
+                    parentNode,
+                    groupId
+                });
+
+                this.cy.add([
+                    cyNode,
+                    { group: 'edges', data: { source: sourceId, target: node.id } },
+                    { group: 'edges', data: { source: node.id, target: targetId } }
+                ]);
+
+                this.runLayout();
+                this.cy.nodes().unselect();
+                this.cy.$id(node.id).select();
+                this.selectedNodeIds = [node.id];
+                this.selectedEdge = null;
+
+                const { amount: estimatedAmount, unit: estimatedUnit } = minutesToAmountAndUnit(node.estimated_minutes ?? null);
+                this.editingNode = {
+                    id: node.id,
+                    title: node.title,
+                    description: node.description || '',
+                    node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
+                    status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
+                    slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    estimated_amount: estimatedAmount,
+                    estimated_unit: estimatedUnit
+                };
+                this.editingNodeOriginal = {
+                    title: String(this.editingNode.title ?? ''),
+                    description: String(this.editingNode.description ?? ''),
+                    node_type_id: String(this.editingNode.node_type_id ?? ''),
+                    status_id: String(this.editingNode.status_id ?? ''),
+                    slot_id: String(this.editingNode.slot_id ?? ''),
+                    estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
+                    estimated_unit: String(this.editingNode.estimated_unit || 'hours')
+                };
+                this.refreshNodeLabels();
+            } catch (error) {
+                alert(`Error inserting node between: ${error.message}`);
             }
         },
 

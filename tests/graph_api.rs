@@ -1188,6 +1188,113 @@ async fn post_edge_404_when_node_not_in_project() {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["error"], "Child node not found");
     }
+
+    #[tokio::test]
+    async fn insert_between_creates_node_and_rewires_edge() {
+        let (cookie, project_id, pool, app) = setup_user_and_project("insertbetween@example.com", "Password123").await;
+
+        // Seed node types / statuses for graph APIs.
+        ensure_graph_seeds(&pool).await;
+
+        // Create two nodes in the project.
+        let parent_node_id = ulid::Ulid::new().to_string();
+        let child_node_id = ulid::Ulid::new().to_string();
+
+        let parent_node = db::nodes::NewNode {
+            id: parent_node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Parent".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+        let child_node = db::nodes::NewNode {
+            id: child_node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Child".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            parent_id: None,
+        };
+
+        boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
+        boardtask::app::db::nodes::insert(&pool, &child_node).await.unwrap();
+
+        // Create initial edge parent -> child.
+        let edge = db::node_edges::NewNodeEdge {
+            parent_id: parent_node_id.clone(),
+            child_id: child_node_id.clone(),
+        };
+        boardtask::app::db::node_edges::insert(&pool, &edge).await.unwrap();
+
+        // Call insert-between endpoint.
+        let request_body = serde_json::json!({
+            "parent_id": parent_node_id,
+            "child_id": child_node_id,
+            "node_type_id": TASK_NODE_TYPE_ID,
+            "title": "Inserted"
+        });
+
+        let request = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/edges/insert-between", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(request_body.to_string()))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::CREATED);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+        let new_node_id = body["id"].as_str().expect("new node id");
+        assert_eq!(body["project_id"], project_id);
+        assert_eq!(body["title"], "Inserted");
+
+        // Fetch graph and assert edges are rewired.
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let get_response = app.oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+
+        let graph_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value = serde_json::from_slice(&graph_bytes).unwrap();
+
+        let edges = graph["edges"].as_array().unwrap();
+        assert_eq!(edges.len(), 2, "graph should contain exactly two edges after insert-between");
+
+        let mut has_parent_to_new = false;
+        let mut has_new_to_child = false;
+        for e in edges {
+            let p = e["parent_id"].as_str().unwrap();
+            let c = e["child_id"].as_str().unwrap();
+            if p == body["project_id"].as_str().unwrap() {
+                // skip any project-level edges (none expected here)
+            }
+            if p == parent_node.id && c == new_node_id {
+                has_parent_to_new = true;
+            }
+            if p == new_node_id && c == child_node.id {
+                has_new_to_child = true;
+            }
+        }
+
+        assert!(has_parent_to_new, "expected edge parent -> new node");
+        assert!(has_new_to_child, "expected edge new node -> child");
+    }
 }
 
 mod get_graph {

@@ -37,7 +37,7 @@ where
     Ok(())
 }
 
-/// Delete a node edge by parent and child IDs.
+/// Delete a node edge by parent and child IDs using a pooled connection.
 pub async fn delete(
     pool: &sqlx::SqlitePool,
     parent_id: &str,
@@ -49,6 +49,26 @@ pub async fn delete(
     .bind(parent_id)
     .bind(child_id)
     .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Delete a node edge by parent and child IDs using a generic executor (e.g. transaction).
+pub async fn delete_with_executor<'e, E>(
+    executor: E,
+    parent_id: &str,
+    child_id: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query(
+        "DELETE FROM node_edges WHERE parent_id = ? AND child_id = ?",
+    )
+    .bind(parent_id)
+    .bind(child_id)
+    .execute(executor)
     .await?;
 
     Ok(())

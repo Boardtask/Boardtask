@@ -14,4 +14,5 @@ pub fn routes() -> Router<AppState> {
         .merge(crate::app::features::graph::delete_node::routes())
         .merge(crate::app::features::graph::create_edge::routes())
         .merge(crate::app::features::graph::delete_edge::routes())
+        .merge(crate::app::features::graph::insert_between::routes())
 }
