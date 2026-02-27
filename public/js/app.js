@@ -989,8 +989,7 @@ const registerGraph = () => {
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
-                    groupId,
-                    mutedOverride: true
+                    groupId
                 });
                 this.cy.add([
                     cyNode,
@@ -1188,8 +1187,7 @@ const registerGraph = () => {
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
-                    groupId,
-                    mutedOverride: true
+                    groupId
                 });
 
                 this.cy.add([
