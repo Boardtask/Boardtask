@@ -29,7 +29,7 @@ async fn create_post_requires_authentication() {
     let pool = common::test_pool().await;
     let app = common::test_router(pool);
 
-    let body = create_project_form_body("My Project");
+    let body = create_project_form_body("My Project", "dummy");
     let request = http::Request::builder()
         .method("POST")
         .uri("/app/projects")
@@ -47,9 +47,9 @@ async fn create_post_requires_authentication() {
 
 #[tokio::test]
 async fn create_project_succeeds() {
-    let (cookie, _project_id, _pool, app) = setup_user_and_project("create@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app, team_id) = setup_user_and_project("create@example.com", "Password123").await;
 
-    let body = create_project_form_body("My Project");
+    let body = create_project_form_body("My Project", &team_id);
     let request = http::Request::builder()
         .method("POST")
         .uri("/app/projects")
@@ -86,9 +86,9 @@ async fn create_project_succeeds() {
 
 #[tokio::test]
 async fn create_project_empty_title_returns_error() {
-    let (cookie, _project_id, _pool, app) = setup_user_and_project("empty@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app, team_id) = setup_user_and_project("empty@example.com", "Password123").await;
 
-    let body = create_project_form_body("");
+    let body = create_project_form_body("", &team_id);
     let request = http::Request::builder()
         .method("POST")
         .uri("/app/projects")
@@ -129,7 +129,7 @@ async fn list_projects_requires_authentication() {
 
 #[tokio::test]
 async fn list_projects_shows_org_projects() {
-    let (cookie, _project_id, pool, app) = setup_user_and_project("list@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app, team_id) = setup_user_and_project("list@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
     let org_id = user.organization_id.clone();
@@ -140,12 +140,14 @@ async fn list_projects_shows_org_projects() {
         title: "Project Alpha".to_string(),
         user_id: user_id.clone(),
         organization_id: org_id.clone(),
+        team_id: team_id.clone(),
     };
     let project2 = projects::NewProject {
         id: ulid::Ulid::new().to_string(),
         title: "Project Beta".to_string(),
         user_id: user_id.clone(),
         organization_id: org_id.clone(),
+        team_id,
     };
     projects::insert(&pool, &project1).await.unwrap();
     projects::insert(&pool, &project2).await.unwrap();
@@ -190,7 +192,7 @@ async fn show_project_requires_authentication() {
 
 #[tokio::test]
 async fn show_project_renders() {
-    let (cookie, project_id, _pool, app) = setup_user_and_project("show@example.com", "Password123").await;
+    let (cookie, project_id, _pool, app, _) = setup_user_and_project("show@example.com", "Password123").await;
 
     let request = http::Request::builder()
         .method("GET")
@@ -212,7 +214,7 @@ async fn show_project_renders() {
 
 #[tokio::test]
 async fn show_project_404_for_nonexistent() {
-    let (cookie, _project_id, _pool, app) = setup_user_and_project("404@example.com", "Password123").await;
+    let (cookie, _project_id, _pool, app, _) = setup_user_and_project("404@example.com", "Password123").await;
 
     let nonexistent_id = "01HZ9999999999999999999999";
     let request = http::Request::builder()
@@ -228,7 +230,7 @@ async fn show_project_404_for_nonexistent() {
 
 #[tokio::test]
 async fn show_project_404_when_user_in_different_org() {
-    let (_owner_cookie, project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
+    let (_owner_cookie, project_id, pool, app, _) = setup_user_and_project("owner@example.com", "Password123").await;
     create_verified_user(&pool, "other@example.com", "Password123").await;
 
     let login_body = login_form_body("other@example.com", "Password123");

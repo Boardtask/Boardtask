@@ -9,6 +9,7 @@ pub struct Project {
     pub user_id: String,
     pub created_at: i64,
     pub organization_id: String,
+    pub team_id: Option<String>,
 }
 
 /// Data structure for inserting a new project.
@@ -17,6 +18,7 @@ pub struct NewProject {
     pub title: String,
     pub user_id: String,
     pub organization_id: String,
+    pub team_id: String,
 }
 
 /// Insert a new project into the database.
@@ -30,13 +32,14 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO projects (id, title, user_id, created_at, organization_id) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO projects (id, title, user_id, created_at, organization_id, team_id) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(&project.id)
     .bind(&project.title)
     .bind(&project.user_id)
     .bind(now)
     .bind(&project.organization_id)
+    .bind(&project.team_id)
     .execute(executor)
     .await?;
 
@@ -50,7 +53,7 @@ pub async fn find_by_user_and_org(
     organization_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC",
     )
     .bind(user_id)
     .bind(organization_id)
@@ -64,7 +67,7 @@ pub async fn list_for_org(
     organization_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE organization_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE organization_id = ? ORDER BY created_at DESC",
     )
     .bind(organization_id)
     .fetch_all(pool)
@@ -78,7 +81,7 @@ pub async fn find_by_id_and_org(
     organization_id: &str,
 ) -> Result<Option<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE id = ? AND organization_id = ?",
+        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE id = ? AND organization_id = ?",
     )
     .bind(id)
     .bind(organization_id)
@@ -92,7 +95,7 @@ pub async fn find_by_id(
     id: &str,
 ) -> Result<Option<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE id = ?",
+        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)

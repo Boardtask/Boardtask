@@ -42,8 +42,12 @@ pub fn login_form_body(email: &str, password: &str) -> String {
     )
 }
 
-pub fn create_project_form_body(title: &str) -> String {
-    format!("title={}", urlencoding::encode(title))
+pub fn create_project_form_body(title: &str, team_id: &str) -> String {
+    format!(
+        "title={}&team_id={}",
+        urlencoding::encode(title),
+        urlencoding::encode(team_id)
+    )
 }
 
 pub fn forgot_password_form_body(email: &str) -> String {
@@ -78,11 +82,11 @@ pub async fn user_id_from_cookie(pool: &sqlx::SqlitePool, cookie: &str) -> Strin
 }
 
 /// Seeds graph, creates a user (via authenticated_cookie), creates one project.
-/// Returns (cookie, project_id, pool, app). Use pool for extra DB setup (e.g. nodes); use app for requests.
+/// Returns (cookie, project_id, pool, app, default_team_id). Use pool for extra DB setup (e.g. nodes); use app for requests.
 pub async fn setup_user_and_project(
     email: &str,
     password: &str,
-) -> (String, String, SqlitePool, axum::Router) {
+) -> (String, String, SqlitePool, axum::Router, String) {
     use boardtask::app::db::{self, projects};
 
     let pool = test_pool().await;
@@ -100,15 +104,22 @@ pub async fn setup_user_and_project(
     .expect("user should exist");
 
     let project_id = ulid::Ulid::new().to_string();
+    let org_id = boardtask::app::domain::OrganizationId::from_string(&user.organization_id).unwrap();
+    let default_team = db::teams::find_default_for_org(&pool, &org_id)
+        .await
+        .unwrap()
+        .expect("default team for org");
+    let default_team_id = default_team.id;
     let project = db::NewProject {
         id: project_id.clone(),
         title: "Test Project".to_string(),
         user_id: user_id.clone(),
         organization_id: user.organization_id.clone(),
+        team_id: default_team_id.clone(),
     };
     projects::insert(&pool, &project).await.unwrap();
 
-    (cookie, project_id, pool, app)
+    (cookie, project_id, pool, app, default_team_id)
 }
 
 /// Create a verified user directly in the database (bypasses signup flow).
@@ -155,6 +166,18 @@ pub async fn create_verified_user(
     .await
     .unwrap();
 
+    // Create default team and add user to it
+    let team_id = ulid::Ulid::new().to_string();
+    let new_team = boardtask::app::db::teams::NewTeam {
+        id: team_id.clone(),
+        organization_id: org_id.as_str().to_string(),
+        name: "Test Org".to_string(),
+    };
+    boardtask::app::db::teams::insert(pool, &new_team).await.unwrap();
+    boardtask::app::db::team_members::add_member(pool, &team_id, &user_id)
+        .await
+        .unwrap();
+
     db::mark_verified(pool, &user_id).await.unwrap();
 
     (user_id, email_type, password_type)
@@ -200,6 +223,18 @@ pub async fn authenticated_cookie(
     )
     .await
     .unwrap();
+
+    // Create default team and add user to it
+    let team_id = ulid::Ulid::new().to_string();
+    let new_team = boardtask::app::db::teams::NewTeam {
+        id: team_id.clone(),
+        organization_id: org_id.as_str().to_string(),
+        name: "Test Org".to_string(),
+    };
+    boardtask::app::db::teams::insert(pool, &new_team).await.unwrap();
+    boardtask::app::db::team_members::add_member(pool, &team_id, &user_id)
+        .await
+        .unwrap();
 
     db::mark_verified(pool, &user_id).await.unwrap();
 

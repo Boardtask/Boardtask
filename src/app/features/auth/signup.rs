@@ -92,20 +92,36 @@ async fn create_account(
     let org_name = format!("{}'s Organization", email.as_str().split('@').next().unwrap_or("My"));
     let new_org = db::organizations::NewOrganization {
         id: org_id.clone(),
-        name: org_name,
+        name: org_name.clone(),
     };
     db::organizations::insert(&mut *tx, &new_org).await.map_err(AppError::Database)?;
+
+    // Create default team for the org
+    let team_id = ulid::Ulid::new().to_string();
+    let new_team = db::teams::NewTeam {
+        id: team_id.clone(),
+        organization_id: org_id.as_str().to_string(),
+        name: org_name.clone(),
+    };
+    db::teams::insert(&mut *tx, &new_team).await.map_err(AppError::Database)?;
 
     // Insert user
     db::users::insert(&mut *tx, &new_user).await.map_err(AppError::Database)?;
 
     // Add user to organization
     db::organizations::add_member(
-        &mut *tx, 
-        &org_id, 
-        &user_id, 
-        crate::app::domain::OrganizationRole::Owner
-    ).await.map_err(AppError::Database)?;
+        &mut *tx,
+        &org_id,
+        &user_id,
+        crate::app::domain::OrganizationRole::Owner,
+    )
+    .await
+    .map_err(AppError::Database)?;
+
+    // Add user to default team
+    db::team_members::add_member(&mut *tx, &team_id, &user_id)
+        .await
+        .map_err(AppError::Database)?;
 
     // Generate verification token
     let token = UserId::new().as_str();

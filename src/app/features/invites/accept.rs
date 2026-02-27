@@ -249,6 +249,10 @@ pub async fn confirm_existing_user(
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to add to organization".to_string()).into_response();
         }
     }
+    // Add user to org's default team (idempotent)
+    if let Ok(Some(default_team)) = db::teams::find_default_for_org(&mut *tx, &org_id).await {
+        let _ = db::team_members::add_member(&mut *tx, &default_team.id, &user_id).await;
+    }
     if db::users::update_organization_id(&mut *tx, &user_id, &org_id).await.is_err() {
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to update organization".to_string()).into_response();
     }

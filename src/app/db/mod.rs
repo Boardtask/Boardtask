@@ -11,8 +11,12 @@ pub mod node_edges;
 pub mod project_slots;
 pub mod task_statuses;
 pub mod integrations;
+pub mod teams;
+pub mod team_members;
 
 pub use project_slots::{NewProjectSlot, ProjectSlot};
+pub use teams::{Team, NewTeam};
+pub use team_members::{TeamMember, NewTeamMember};
 pub use users::{find_by_email, User, NewUser, mark_verified, update_password};
 pub use sessions::{create, find_valid, delete, Session};
 pub use node_types::{get_all_systems, NodeType, NewNodeType};

@@ -47,7 +47,7 @@ async fn organization_settings_requires_authentication() {
 
 #[tokio::test]
 async fn create_invite_as_owner_succeeds_and_creates_db_row() {
-    let (cookie, _project_id, pool, app) = setup_user_and_project("inviter@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app, _) = setup_user_and_project("inviter@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(
         &pool,
@@ -87,7 +87,7 @@ async fn create_invite_as_owner_succeeds_and_creates_db_row() {
 
 #[tokio::test]
 async fn accept_invite_new_user_get_shows_signup_link_no_password_form() {
-    let (cookie, _project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app, _) = setup_user_and_project("owner@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(
         &pool,
@@ -164,7 +164,7 @@ async fn accept_invite_post_returns_method_not_allowed() {
 
 #[tokio::test]
 async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
-    let (cookie, _project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app, _) = setup_user_and_project("owner@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(
         &pool,
@@ -259,7 +259,7 @@ async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
 
 #[tokio::test]
 async fn accept_invite_as_new_user_then_app_accessible() {
-    let (cookie, project_id, pool, app) = setup_user_and_project("owner2@example.com", "Password123").await;
+    let (cookie, project_id, pool, app, _) = setup_user_and_project("owner2@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(
         &pool,
@@ -367,7 +367,7 @@ async fn accept_invite_as_new_user_then_app_accessible() {
 
 #[tokio::test]
 async fn accept_invite_as_existing_user_switches_org() {
-    let (owner_cookie, owner_project_id, pool, app) = setup_user_and_project("orgowner@example.com", "Password123").await;
+    let (owner_cookie, owner_project_id, pool, app, _) = setup_user_and_project("orgowner@example.com", "Password123").await;
     let owner_user_id = user_id_from_cookie(&pool, &owner_cookie).await;
     let owner_user = boardtask::app::db::users::find_by_id(
         &pool,
@@ -467,7 +467,7 @@ async fn accept_invite_invalid_token_shows_error() {
 
 #[tokio::test]
 async fn accept_invite_expired_token_shows_error() {
-    let (cookie, _project_id, pool, app) = setup_user_and_project("expirer@example.com", "Password123").await;
+    let (cookie, _project_id, pool, app, _) = setup_user_and_project("expirer@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(
         &pool,
