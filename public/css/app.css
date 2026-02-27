@@ -3331,7 +3331,7 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
   flex-direction: column;
   gap: 0.75rem;
 }
-.side-drawer__close { color: #888888; cursor: pointer; }
+.side-drawer__close { color: #888888; cursor: pointer; background: none; border: none; }
 .side-drawer__close:hover { color: #4A4A4A; }
 .side-drawer input, .side-drawer select, .side-drawer textarea { background: rgba(0, 0, 0, 0.02); border-color: #E5E1DA; }
 .side-drawer input:focus, .side-drawer select:focus, .side-drawer textarea:focus { outline: none; box-shadow: 0 0 0 1px #5A8FF0; border-color: #5A8FF0; }
