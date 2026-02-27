@@ -17,7 +17,7 @@ pub mod team_members;
 pub use project_slots::{NewProjectSlot, ProjectSlot};
 pub use teams::{Team, NewTeam};
 pub use team_members::{TeamMember, NewTeamMember};
-pub use users::{find_by_email, User, NewUser, mark_verified, update_password};
+pub use users::{find_by_email, User, NewUser, mark_verified, update_password, update_name, display_name, display_name_from_parts};
 pub use sessions::{create, find_valid, delete, Session};
 pub use node_types::{get_all_systems, NodeType, NewNodeType};
 pub use task_statuses::TaskStatus;

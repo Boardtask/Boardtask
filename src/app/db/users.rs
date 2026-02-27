@@ -13,6 +13,8 @@ pub struct User {
     pub updated_at: i64,
     pub email_verified_at: Option<i64>,
     pub organization_id: String,
+    pub first_name: String,
+    pub last_name: String,
 }
 
 /// Data structure for inserting a new user.
@@ -21,6 +23,8 @@ pub struct NewUser {
     pub email: Email,
     pub password_hash: HashedPassword,
     pub organization_id: OrganizationId,
+    pub first_name: String,
+    pub last_name: String,
 }
 
 /// Find a user by email address.
@@ -29,7 +33,7 @@ pub async fn find_by_email(
     email: &Email,
 ) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name FROM users WHERE email = ?",
     )
     .bind(email.as_str())
     .fetch_optional(pool)
@@ -44,7 +48,9 @@ pub async fn find_by_id<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
 {
-    sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?")
+    sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name FROM users WHERE id = ?",
+    )
         .bind(user_id.as_str())
         .fetch_optional(executor)
         .await
@@ -87,6 +93,44 @@ where
     Ok(())
 }
 
+/// Update a user's first and last name.
+pub async fn update_name<'e, E>(
+    executor: E,
+    user_id: &UserId,
+    first_name: &str,
+    last_name: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("UPDATE users SET first_name = ?, last_name = ?, updated_at = ? WHERE id = ?")
+        .bind(first_name)
+        .bind(last_name)
+        .bind(now)
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
+/// Return display name: "First Last" if either name is set, otherwise email.
+pub fn display_name(user: &User) -> String {
+    display_name_from_parts(&user.first_name, &user.last_name, &user.email)
+}
+
+/// Display name from first/last and email fallback.
+pub fn display_name_from_parts(first_name: &str, last_name: &str, email: &str) -> String {
+    let first = first_name.trim();
+    let last = last_name.trim();
+    let full = format!("{} {}", first, last).trim().to_string();
+    if full.is_empty() {
+        email.to_string()
+    } else {
+        full
+    }
+}
+
 /// Update a user's organization (e.g. when accepting an invite to a different org).
 pub async fn update_organization_id<'e, E>(
     executor: E,
@@ -117,7 +161,7 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO users (id, email, password_hash, organization_id, created_at, updated_at, email_verified_at) VALUES (?, ?, ?, ?, ?, ?, NULL)",
+        "INSERT INTO users (id, email, password_hash, organization_id, created_at, updated_at, email_verified_at, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
     )
     .bind(user.id.as_str())
     .bind(user.email.as_str())
@@ -125,6 +169,8 @@ where
     .bind(user.organization_id.as_str())
     .bind(now)
     .bind(now)
+    .bind(&user.first_name)
+    .bind(&user.last_name)
     .execute(executor)
     .await?;
 

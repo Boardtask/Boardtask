@@ -84,6 +84,8 @@ async fn create_account(
         email: email.clone(),
         password_hash,
         organization_id: org_id.clone(),
+        first_name: String::new(),
+        last_name: String::new(),
     };
 
     let mut tx = pool.begin().await.map_err(AppError::Database)?;

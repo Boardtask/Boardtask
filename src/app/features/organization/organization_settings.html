@@ -21,6 +21,7 @@
     <table class="table w-full border border-gray-200 mb-6">
         <thead>
             <tr class="border-b border-gray-200">
+                <th class="text-left p-3 font-semibold">Name</th>
                 <th class="text-left p-3 font-semibold">Email</th>
                 <th class="text-left p-3 font-semibold">Role</th>
             </tr>
@@ -28,12 +29,13 @@
         <tbody>
             {% for member in members %}
             <tr class="border-b border-gray-200">
-                <td class="p-3">{{ member.email }}</td>
+                <td class="p-3">{{ member.display_name }}</td>
+                <td class="p-3 text-text-secondary">{{ member.email }}</td>
                 <td class="p-3 text-text-secondary">{{ member.role }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="2" class="p-3 text-text-secondary">No members yet.</td>
+                <td colspan="3" class="p-3 text-text-secondary">No members yet.</td>
             </tr>
             {% endfor %}
         </tbody>

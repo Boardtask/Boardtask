@@ -21,6 +21,7 @@ use crate::app::{
 
 /// One row for the members table on the org settings page.
 pub struct MemberRow {
+    pub display_name: String,
     pub email: String,
     pub role: String,
 }
@@ -96,9 +97,13 @@ pub async fn show(
     };
     let members: Vec<MemberRow> = members
         .into_iter()
-        .map(|m| MemberRow {
-            email: m.email,
-            role: m.role,
+        .map(|m| {
+            let display_name = db::display_name_from_parts(&m.first_name, &m.last_name, &m.email);
+            MemberRow {
+                display_name,
+                email: m.email,
+                role: m.role,
+            }
         })
         .collect();
 

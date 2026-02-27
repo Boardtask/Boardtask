@@ -30,6 +30,8 @@ pub struct AccountTemplate {
     pub app_name: &'static str,
     pub email: String,
     pub email_verified: bool,
+    pub first_name_value: String,
+    pub last_name_value: String,
     pub error: String,
     pub success: String,
 }
@@ -45,6 +47,16 @@ pub struct ChangePasswordForm {
 
     #[validate(must_match(other = "new_password"))]
     pub confirm_password: String,
+}
+
+/// Update name form data.
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateNameForm {
+    #[validate(length(min = 1, max = 100))]
+    pub first_name: String,
+
+    #[validate(length(min = 1, max = 100))]
+    pub last_name: String,
 }
 
 fn error_redirect(msg: &str) -> Redirect {
@@ -69,10 +81,15 @@ pub async fn show_account(
         Err(_) => return Redirect::to("/login").into_response(),
     };
 
+    let first_name_value = user.first_name.clone();
+    let last_name_value = user.last_name.clone();
+
     let template = AccountTemplate {
         app_name: APP_NAME,
         email: user.email,
         email_verified: user.email_verified_at.is_some(),
+        first_name_value,
+        last_name_value,
         error: query.error.unwrap_or_default(),
         success: query.success.unwrap_or_default(),
     };
@@ -138,9 +155,43 @@ pub async fn change_password(
     Redirect::to("/app/account?success=password_changed").into_response()
 }
 
+/// POST /app/account/update-name — Update first and last name. Validate first, then write.
+pub async fn update_name(
+    AuthenticatedSession(session): AuthenticatedSession,
+    State(state): State<AppState>,
+    Form(form): Form<UpdateNameForm>,
+) -> impl IntoResponse {
+    if form.validate().is_err() {
+        return error_redirect("First and last name are required (1–100 characters each).")
+            .into_response();
+    }
+
+    let user_id = match UserId::from_string(&session.user_id) {
+        Ok(id) => id,
+        Err(_) => return Redirect::to("/login").into_response(),
+    };
+
+    let first = form.first_name.trim();
+    let last = form.last_name.trim();
+    if first.is_empty() || last.is_empty() {
+        return error_redirect("First and last name cannot be empty.")
+            .into_response();
+    }
+
+    if db::users::update_name(&state.db, &user_id, first, last)
+        .await
+        .is_err()
+    {
+        return error_redirect("Failed to update name.").into_response();
+    }
+
+    Redirect::to("/app/account?success=name_updated").into_response()
+}
+
 /// Account routes.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/account", get(show_account))
         .route("/app/account/change-password", post(change_password))
+        .route("/app/account/update-name", post(update_name))
 }

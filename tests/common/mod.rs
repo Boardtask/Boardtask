@@ -153,6 +153,8 @@ pub async fn create_verified_user(
         email: email_type.clone(),
         password_hash,
         organization_id: org_id.clone(),
+        first_name: String::new(),
+        last_name: String::new(),
     };
     boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
 
@@ -211,6 +213,8 @@ pub async fn authenticated_cookie(
         email: email_type.clone(),
         password_hash,
         organization_id: org_id.clone(),
+        first_name: String::new(),
+        last_name: String::new(),
     };
     boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
 
