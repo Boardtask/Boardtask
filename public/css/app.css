@@ -3242,6 +3242,7 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 }
 .cy-node--epic { border-left-color: #9B6BCA; }
 .cy-node--task { border-left-color: #5A8FF0; }
+.cy-node--milestone { border-left-color: #6BAF92; }
 .cy-node--bug { border-left-color: #D65D5D; }
 .cy-node--warning { border-left-color: #D9A441; }
 .cy-node--selected {

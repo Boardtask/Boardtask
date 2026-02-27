@@ -23,6 +23,7 @@ const SEMANTIC_COLORS = {
     epic: '#9B6BCA',
     task: '#5A8FF0',
     bug: '#D65D5D',
+    milestone: '#6BAF92',
     success: '#6BAF92',
     warning: '#D9A441'
 };
@@ -31,6 +32,7 @@ function nodeTypeSlug(nodeTypeName) {
     const n = (nodeTypeName || '').toLowerCase();
     if (n === 'epic') return 'epic';
     if (n === 'bug') return 'bug';
+    if (n === 'milestone') return 'milestone';
     return 'task';
 }
 
