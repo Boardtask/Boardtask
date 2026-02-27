@@ -345,13 +345,13 @@ const registerGraph = () => {
                 !eq(n.estimated_unit, o.estimated_unit);
         },
 
-        requestCloseEditPanel() {
+        async requestCloseEditPanel() {
             if (!this.hasEditChanges()) {
                 this.closeEditPanel();
                 return;
             }
             if (confirm('You have unsaved changes. Save before closing?')) {
-                this.saveNode();
+                await this.saveNode();
             } else {
                 this.closeEditPanel();
             }
