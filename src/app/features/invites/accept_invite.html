@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Accept invite · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8 px-4">
+    {% if invalid_message != "" %}
+    <h1 class="text-2xl font-bold mb-6">Invalid or expired invite</h1>
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        {{ invalid_message }}
+    </div>
+    <p class="mt-4">
+        <a href="/login" class="text-blue-600 hover:text-blue-500">Log in</a>
+        or
+        <a href="/" class="text-blue-600 hover:text-blue-500">Go home</a>
+    </p>
+    {% else if existing_login_url != "" %}
+    <h1 class="text-2xl font-bold mb-6">You're invited to join {{ existing_org_name }}</h1>
+    <p class="mb-4">You already have an account. Log in to join this organization.</p>
+    <a
+        href="{{ existing_login_url }}"
+        class="inline-block bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+    >
+        Log in to continue
+    </a>
+    <p class="mt-4">
+        <a href="/" class="text-blue-600 hover:text-blue-500">Go home</a>
+    </p>
+    {% else if new_user_token != "" %}
+    <h1 class="text-2xl font-bold mb-6">Join {{ new_user_org_name }}</h1>
+    <p class="mb-4">Create your account to accept this invite.</p>
+
+    {% if new_user_error != "" %}
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        {{ new_user_error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/accept-invite" class="space-y-4">
+        <input type="hidden" name="token" value="{{ new_user_token }}">
+        <div>
+            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+            <input
+                type="email"
+                id="email"
+                value="{{ new_user_email }}"
+                readonly
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+            >
+        </div>
+        <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+            <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                minlength="8"
+                maxlength="128"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+            <p class="mt-1 text-sm text-gray-500">Must be 8–128 characters with uppercase, lowercase, and digit.</p>
+        </div>
+        <div>
+            <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+            <input
+                type="password"
+                id="confirm_password"
+                name="confirm_password"
+                required
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+        </div>
+        <button
+            type="submit"
+            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+            Create account and join
+        </button>
+    </form>
+    <p class="mt-4">
+        <a href="/login" class="text-blue-600 hover:text-blue-500">Already have an account? Log in</a>
+    </p>
+    {% else %}
+    <p>Something went wrong.</p>
+    <p class="mt-4"><a href="/" class="text-blue-600 hover:text-blue-500">Go home</a></p>
+    {% endif %}
+</div>
+{% endblock %}

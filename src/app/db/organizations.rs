@@ -113,3 +113,27 @@ where
 
     Ok(row.and_then(|r| r.parse::<OrganizationRole>().ok()))
 }
+
+/// One row for listing org members with email (for settings page).
+#[derive(Debug, FromRow)]
+pub struct OrgMemberWithEmail {
+    pub user_id: String,
+    pub email: String,
+    pub role: String,
+}
+
+/// List all members of an organization with their email addresses.
+pub async fn list_members_with_email<'e, E>(
+    executor: E,
+    organization_id: &OrganizationId,
+) -> Result<Vec<OrgMemberWithEmail>, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    sqlx::query_as::<_, OrgMemberWithEmail>(
+        "SELECT om.user_id, u.email, om.role FROM organization_members om JOIN users u ON u.id = om.user_id WHERE om.organization_id = ? ORDER BY om.role, u.email",
+    )
+    .bind(organization_id.as_str())
+    .fetch_all(executor)
+    .await
+}

@@ -27,6 +27,8 @@ pub fn routes(_state: AppState) -> Router<AppState> {
         .merge(features::dashboard::routes())
         .merge(features::account::routes())
         .merge(features::integrations::routes())
+        .merge(features::invites::routes())
+        .merge(features::organization::routes())
         .merge(features::projects::routes())
         .merge(features::graph::api::routes())
 }

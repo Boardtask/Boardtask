@@ -87,6 +87,25 @@ where
     Ok(())
 }
 
+/// Update a user's organization (e.g. when accepting an invite to a different org).
+pub async fn update_organization_id<'e, E>(
+    executor: E,
+    user_id: &UserId,
+    organization_id: &OrganizationId,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("UPDATE users SET organization_id = ?, updated_at = ? WHERE id = ?")
+        .bind(organization_id.as_str())
+        .bind(now)
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
 /// Insert a new user into the database.
 pub async fn insert<'e, E>(
     executor: E,

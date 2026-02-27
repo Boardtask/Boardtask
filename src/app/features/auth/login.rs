@@ -1,6 +1,6 @@
 use askama::Template;
 use axum::{
-    extract::State,
+    extract::{Query, State},
     response::{Html, IntoResponse, Redirect},
     Form, routing::get, Router,
 };
@@ -24,6 +24,9 @@ pub struct LoginForm {
 
     #[validate(length(min = 1))]
     pub password: String,
+
+    /// Redirect path after login (from GET query or hidden field).
+    pub next: Option<String>,
 }
 
 /// Login page template.
@@ -34,6 +37,8 @@ pub struct LoginTemplate {
     pub error: String,
     pub email: String,
     pub resend_verification_url: String,
+    /// Redirect path after login (e.g. /accept-invite/confirm?token=...). Must start with /.
+    pub next: String,
 }
 
 /// Authenticate a user. Returns the session ID on success.
@@ -77,13 +82,28 @@ async fn authenticate(
 /// Message shown when user needs to verify email.
 const UNVERIFIED_MSG: &str = "Please verify your email before signing in. Check your inbox for the verification link.";
 
+/// Query params for login page.
+#[derive(Debug, Deserialize)]
+pub struct LoginQuery {
+    pub next: Option<String>,
+}
+
+/// Safe redirect path: only allow relative paths starting with / to avoid open redirect.
+fn safe_redirect_next(next: Option<String>) -> String {
+    match next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n,
+        _ => String::new(),
+    }
+}
+
 /// GET /login — Show login form.
-pub async fn show() -> LoginTemplate {
+pub async fn show(Query(query): Query<LoginQuery>) -> LoginTemplate {
     LoginTemplate {
         app_name: APP_NAME,
         error: String::new(),
         email: String::new(),
         resend_verification_url: String::new(),
+        next: safe_redirect_next(query.next),
     }
 }
 
@@ -91,8 +111,10 @@ pub async fn show() -> LoginTemplate {
 pub async fn submit(
     State(state): State<AppState>,
     jar: CookieJar,
+    Query(query): Query<LoginQuery>,
     Form(form): Form<LoginForm>,
 ) -> Result<impl IntoResponse, Html<String>> {
+    let next = safe_redirect_next(query.next.clone());
     // Validate form structure
     if let Err(_) = form.validate() {
         let template = LoginTemplate {
@@ -100,6 +122,7 @@ pub async fn submit(
             error: "Invalid form data".to_string(),
             email: form.email.clone(),
             resend_verification_url: String::new(),
+            next: next.clone(),
         };
         return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
     }
@@ -113,6 +136,7 @@ pub async fn submit(
                 error: "Invalid email or password".to_string(),
                 email: form.email,
                 resend_verification_url: String::new(),
+                next: next.clone(),
             };
             return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
         }
@@ -125,7 +149,9 @@ pub async fn submit(
     // Authenticate
     match authenticate(&state.db, &email, &password).await {
         Ok(session_id) => {
-            Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to("/app")))
+            let redirect_to = safe_redirect_next(form.next.clone());
+            let redirect_to = if redirect_to.is_empty() { "/app" } else { redirect_to.as_str() };
+            Ok((jar.add(crate::app::session::session_cookie(session_id)), Redirect::to(redirect_to)))
         }
         Err(AppError::Auth(ref msg)) => {
             let resend_verification_url = if msg == UNVERIFIED_MSG {
@@ -138,6 +164,7 @@ pub async fn submit(
                 error: msg.clone(),
                 email: email.as_str().to_string(),
                 resend_verification_url,
+                next: next.clone(),
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }
@@ -147,6 +174,7 @@ pub async fn submit(
                 error: "Internal server error".to_string(),
                 email: email.as_str().to_string(),
                 resend_verification_url: String::new(),
+                next: next.clone(),
             };
             Err(Html(template.render().map_err(|_| "Template error".to_string())?))
         }
