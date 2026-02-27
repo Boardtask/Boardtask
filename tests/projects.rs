@@ -128,7 +128,7 @@ async fn list_projects_requires_authentication() {
 }
 
 #[tokio::test]
-async fn list_projects_shows_user_projects() {
+async fn list_projects_shows_org_projects() {
     let (cookie, _project_id, pool, app) = setup_user_and_project("list@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;
     let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
@@ -163,7 +163,7 @@ async fn list_projects_shows_user_projects() {
     let body_str = String::from_utf8_lossy(&body_bytes);
     assert!(
         body_str.contains("Project Alpha") && body_str.contains("Project Beta"),
-        "Expected both project titles in list, got: {}",
+        "Expected both org project titles in list, got: {}",
         body_str
     );
 }
@@ -224,4 +224,36 @@ async fn show_project_404_for_nonexistent() {
     let response = app.oneshot(request).await.unwrap();
 
     assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn show_project_404_when_user_in_different_org() {
+    let (_owner_cookie, project_id, pool, app) = setup_user_and_project("owner@example.com", "Password123").await;
+    create_verified_user(&pool, "other@example.com", "Password123").await;
+
+    let login_body = login_form_body("other@example.com", "Password123");
+    let login_request = http::Request::builder()
+        .method("POST")
+        .uri("/login")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(axum::body::Body::from(login_body))
+        .unwrap();
+    let login_response = app.clone().oneshot(login_request).await.unwrap();
+    assert_eq!(login_response.status(), http::StatusCode::SEE_OTHER);
+    let set_cookie = login_response.headers().get("set-cookie").unwrap().to_str().unwrap();
+    let other_cookie = set_cookie.split(';').next().unwrap_or("").to_string();
+
+    let request = http::Request::builder()
+        .method("GET")
+        .uri(&format!("/app/projects/{}", project_id))
+        .header("cookie", &other_cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        http::StatusCode::NOT_FOUND,
+        "User in different org must not access project"
+    );
 }

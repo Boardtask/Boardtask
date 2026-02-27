@@ -58,6 +58,19 @@ pub async fn find_by_user_and_org(
     .await
 }
 
+/// List all projects for an organisation. Caller must have verified org membership.
+pub async fn list_for_org(
+    pool: &sqlx::SqlitePool,
+    organization_id: &str,
+) -> Result<Vec<Project>, sqlx::Error> {
+    sqlx::query_as::<_, Project>(
+        "SELECT id, title, user_id, created_at, organization_id FROM projects WHERE organization_id = ? ORDER BY created_at DESC",
+    )
+    .bind(organization_id)
+    .fetch_all(pool)
+    .await
+}
+
 /// Find a project by ID and organisation. Returns None if project doesn't exist or belongs to another org.
 pub async fn find_by_id_and_org(
     pool: &sqlx::SqlitePool,

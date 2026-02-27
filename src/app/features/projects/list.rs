@@ -30,7 +30,7 @@ pub struct ProjectsListTemplate {
     pub projects: Vec<ProjectRow>,
 }
 
-/// GET /app/projects — List user's projects (scoped by org).
+/// GET /app/projects — List org's projects (scoped by org membership).
 pub async fn list(
     AuthenticatedSession(session): AuthenticatedSession,
     State(state): State<AppState>,
@@ -43,13 +43,7 @@ pub async fn list(
         return (StatusCode::NOT_FOUND, "Not found".to_string()).into_response();
     }
 
-    let db_projects = match db::projects::find_by_user_and_org(
-        &state.db,
-        &session.user_id,
-        &session.organization_id,
-    )
-    .await
-    {
+    let db_projects = match db::projects::list_for_org(&state.db, &session.organization_id).await {
         Ok(p) => p,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error").into_response(),
     };

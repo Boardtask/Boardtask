@@ -198,6 +198,14 @@ async fn accept_invite_as_new_user_then_app_accessible() {
     let list_response = app2.clone().oneshot(list_request).await.unwrap();
     assert_eq!(list_response.status(), http::StatusCode::OK);
 
+    let list_body_bytes = list_response.into_body().collect().await.unwrap().to_bytes();
+    let list_body_str = String::from_utf8_lossy(&list_body_bytes);
+    assert!(
+        list_body_str.contains("Test Project"),
+        "Invited org member should see owner's project in list, got: {}",
+        list_body_str
+    );
+
     let show_request = http::Request::builder()
         .method("GET")
         .uri(&format!("/app/projects/{}", project_id))
