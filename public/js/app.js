@@ -525,7 +525,7 @@ const registerGraph = () => {
                     padding: 20,
                     klay: {
                         direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
-                        spacing: 60
+                        spacing: 60,
                     }
                 }
             });
@@ -1480,6 +1480,7 @@ const registerGraph = () => {
             const cy = this.cy;
             const layout = cy.layout({
                 name: 'klay',
+                nodeDimensionsIncludeLabels: true,
                 animate: true,
                 animationDuration: 500,
                 fit: !!opts.fit,
@@ -1489,7 +1490,8 @@ const registerGraph = () => {
                     spacing: 60,
                     layoutHierarchy: true,
                     mergeEdges: true,
-                    nodeLayering: 'LONGEST_PATH'
+                    nodeLayering: 'LONGEST_PATH',
+                    fixedAlignment: 'BALANCED',
                 }
             });
 
