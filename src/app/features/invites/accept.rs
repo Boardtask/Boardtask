@@ -259,19 +259,18 @@ pub async fn confirm_existing_user(
     if db::organization_invites::delete_by_id(&mut *tx, &invite.id).await.is_err() {
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to complete invite".to_string()).into_response();
     }
-    if tx.commit().await.is_err() {
-        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response();
-    }
-
-    if db::sessions::delete(&state.db, &session.id).await.is_err() {
+    // Rotate session inside the same transaction so we never commit org switch without a matching session.
+    if db::sessions::delete(&mut *tx, &session.id).await.is_err() {
         return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to update session".to_string()).into_response();
     }
-
     let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
-    let new_session_id = match db::sessions::create(&state.db, &user_id, &org_id, expires_at).await {
+    let new_session_id = match db::sessions::create(&mut *tx, &user_id, &org_id, expires_at).await {
         Ok(s) => s,
         Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Failed to create session".to_string()).into_response(),
     };
+    if tx.commit().await.is_err() {
+        return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response();
+    }
 
     let jar = jar.add(session::session_cookie(new_session_id));
     (jar, Redirect::to("/app")).into_response()

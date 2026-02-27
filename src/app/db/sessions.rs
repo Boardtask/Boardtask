@@ -58,11 +58,14 @@ pub async fn find_valid(
     .await
 }
 
-/// Delete a session by ID. Used on logout.
-pub async fn delete(pool: &sqlx::SqlitePool, session_id: &str) -> Result<(), sqlx::Error> {
+/// Delete a session by ID. Used on logout and when rotating session (e.g. accept invite).
+pub async fn delete<'e, E>(executor: E, session_id: &str) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
     sqlx::query("DELETE FROM sessions WHERE id = ?")
         .bind(session_id)
-        .execute(pool)
+        .execute(executor)
         .await?;
     Ok(())
 }
