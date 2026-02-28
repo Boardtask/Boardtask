@@ -217,37 +217,6 @@ function buildNodeLabelHtml(data, opts) {
 }
 
 /**
- * Reorder root nodes by created_at after layout so they stay stable when adding/removing nodes.
- * Call from layoutstop. Reuses Klay's root positions and reassigns so the first root by
- * created_at gets the first slot (left for TB, top for LR).
- * @param {object} cy - Cytoscape instance
- * @param {('TB' | 'LR')} layoutDirection - true for top-down, false for left-right
- */
-function applyStableRootOrder(cy, layoutDirection) {
-    const roots = cy.nodes().filter(n => n.incomers().length === 0 && !n.data('isTemporary'));
-    if (roots.length <= 1) return;
-
-    const sortedRoots = roots.sort((a, b) => {
-        const ta = a.data('created_at') ?? 0;
-        const tb = b.data('created_at') ?? 0;
-        if (ta !== tb) return ta - tb;
-        return String(a.id()).localeCompare(String(b.id()));
-    });
-
-    if (layoutDirection === 'LR') {
-        const xs = sortedRoots.map(r => r.position('x')).sort((a, b) => a - b);
-        sortedRoots.forEach((node, i) => {
-            node.position({ x: xs[i], y: node.position('y') });
-        });
-    } else {
-        const ys = sortedRoots.map(r => r.position('y')).sort((a, b) => a - b);
-        sortedRoots.forEach((node, i) => {
-            node.position({ x: node.position('x'), y: ys[i] });
-        });
-    }
-}
-
-/**
  * Creates an encapsulated connection port module for the graph.
  * All connector behavior (port element, preview edge, hover/click, connectFromPort) lives here.
  * Setup receives the graph and uses it for all dependencies.
@@ -838,10 +807,7 @@ const registerGraph = () => {
                     padding: 20,
                     klay: {
                         direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
-                        spacing: 80,
-                        // false: treat disconnected nodes (e.g. standalone tasks) as same graph; avoids overlap
-                        // when Klay would otherwise place single-node components atop the main component
-                        separateConnectedComponents: false,
+                        spacing: 60,
                     }
                 }
             });
@@ -1862,7 +1828,7 @@ const registerGraph = () => {
                 animate: true,
                 animationDuration: 500,
                 fit: !!opts.fit,
-                padding: 20,
+                padding: 30,
                 klay: {
                     direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
                     spacing: 80,
@@ -1883,7 +1849,6 @@ const registerGraph = () => {
             }
 
             layout.on('layoutstop', () => {
-                applyStableRootOrder(cy, this.layoutDirection);
                 if (this.updatePortPosition) this.updatePortPosition();
             });
 
