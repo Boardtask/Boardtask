@@ -221,9 +221,9 @@ function buildNodeLabelHtml(data, opts) {
  * Call from layoutstop. Reuses Klay's root positions and reassigns so the first root by
  * created_at gets the first slot (left for TB, top for LR).
  * @param {object} cy - Cytoscape instance
- * @param {boolean} layoutDirectionTB - true for top-down, false for left-right
+ * @param {('TB' | 'LR')} layoutDirection - true for top-down, false for left-right
  */
-function applyStableRootOrder(cy, layoutDirectionTB) {
+function applyStableRootOrder(cy, layoutDirection) {
     const roots = cy.nodes().filter(n => n.incomers().length === 0 && !n.data('isTemporary'));
     if (roots.length <= 1) return;
 
@@ -234,7 +234,7 @@ function applyStableRootOrder(cy, layoutDirectionTB) {
         return String(a.id()).localeCompare(String(b.id()));
     });
 
-    if (layoutDirectionTB) {
+    if (layoutDirection === 'LR') {
         const xs = sortedRoots.map(r => r.position('x')).sort((a, b) => a - b);
         sortedRoots.forEach((node, i) => {
             node.position({ x: xs[i], y: node.position('y') });
@@ -782,7 +782,7 @@ const registerGraph = () => {
                         style: {
                             'shape': 'round-rectangle',
                             'width': 220,
-                            'height': 80,
+                            'height': 95,   // must match .cy-node height in app.css
                             'opacity': 0,
                             'label': ''
                         }
@@ -838,7 +838,10 @@ const registerGraph = () => {
                     padding: 20,
                     klay: {
                         direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
-                        spacing: 60,
+                        spacing: 80,
+                        // false: treat disconnected nodes (e.g. standalone tasks) as same graph; avoids overlap
+                        // when Klay would otherwise place single-node components atop the main component
+                        separateConnectedComponents: false,
                     }
                 }
             });
@@ -1862,7 +1865,7 @@ const registerGraph = () => {
                 padding: 20,
                 klay: {
                     direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
-                    spacing: 60,
+                    spacing: 80,
                     layoutHierarchy: true,
                     mergeEdges: true,
                     nodeLayering: 'LONGEST_PATH',
@@ -1880,7 +1883,7 @@ const registerGraph = () => {
             }
 
             layout.on('layoutstop', () => {
-                applyStableRootOrder(cy, this.layoutDirection === 'TB');
+                applyStableRootOrder(cy, this.layoutDirection);
                 if (this.updatePortPosition) this.updatePortPosition();
             });
 

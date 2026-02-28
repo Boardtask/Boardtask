@@ -22,7 +22,8 @@ hosts:
 	fi
 
 # Run in dev mode with auto-reload on file changes
-dev:
+# migrate-fix-user-names: run once if you had the old backfill migration applied, then remove from this line
+dev: migrate
 	cargo watch -x run
 
 # Run Caddy reverse proxy (run this in a separate terminal)
