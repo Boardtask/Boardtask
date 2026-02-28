@@ -699,6 +699,10 @@ const registerGraph = () => {
 
                 const groupIds = new Set(data.nodes.map(n => n.parent_id).filter(Boolean));
                 const isRoot = (id) => !data.edges.some(e => e.child_id === id);
+                const parentFor = (childId) => {
+                    const edge = data.edges.find(e => e.child_id === childId);
+                    return edge ? data.nodes.find(nn => nn.id === edge.parent_id) : null;
+                };
 
                 const elements = [
                     ...data.nodes.map(n => {
@@ -706,9 +710,12 @@ const registerGraph = () => {
                         const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         const slot = this.projectSlots.find(s => s.id === (n.slot_id || ''));
                         const root = isRoot(n.id);
-                        const muted = !root;
-                        const isGroupNode = groupIds.has(n.id);
                         const statusId = n.status_id ?? DEFAULTS.STATUS_ID;
+                        const selfDone = statusId === DONE_STATUS_ID;
+                        const parent = parentFor(n.id);
+                        const parentDone = parent ? ((parent.status_id ?? DEFAULTS.STATUS_ID) === DONE_STATUS_ID) : true;
+                        const muted = !root && !selfDone && !parentDone;
+                        const isGroupNode = groupIds.has(n.id);
                         const filteredOut = this.progressFilter ? !this.matchesProgressFilter(statusId) : false;
                         return {
                             group: 'nodes',
@@ -753,7 +760,15 @@ const registerGraph = () => {
             cy.nodes().forEach(node => {
                 const id = node.id();
                 const root = isRoot(id);
-                const muted = !root;
+                let muted = false;
+                if (!root) {
+                    const statusId = node.data('status_id') || DEFAULTS.STATUS_ID;
+                    const selfDone = statusId === DONE_STATUS_ID;
+                    const incomers = node.incomers();
+                    const parent = incomers.length > 0 ? incomers.first().source() : null;
+                    const parentDone = parent ? ((parent.data('status_id') || DEFAULTS.STATUS_ID) === DONE_STATUS_ID) : true;
+                    muted = !selfDone && !parentDone;
+                }
                 node.data('muted', muted);
             });
             try {
@@ -1126,6 +1141,11 @@ const registerGraph = () => {
             const sourceIsGroup = this.isGroupNode(sourceId);
             const targetIsGroup = this.isGroupNode(targetId);
 
+            if (sourceIsGroup || targetIsGroup) {
+                alert('Cannot connect two groups. Connect a task to a group or to another task.');
+                return;
+            }
+
             try {
                 await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
                     parent_id: sourceId,
@@ -1134,9 +1154,7 @@ const registerGraph = () => {
 
                 this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
                 this.runLayout();
-                if (!sourceIsGroup && !targetIsGroup) {
-                    this.recomputeMutedForGraph();
-                }
+                this.recomputeMutedForGraph();
             } catch (error) {
                 alert(`Error connecting nodes: ${error.message}`);
             }
