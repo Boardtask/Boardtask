@@ -460,6 +460,7 @@ function createRemoveNode() {
                     continue;
                 }
                 await graph.api(`/api/projects/${graph.projectId}/nodes/${id}`, 'DELETE');
+                graph.cy.remove(node);
                 needReload = true;
             }
             graph.selectedNodeIds = [];
