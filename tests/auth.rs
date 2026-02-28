@@ -69,6 +69,38 @@ mod auth {
             body_str
         );
     }
+
+    #[tokio::test]
+    async fn whitespace_only_names_returns_error() {
+        let pool = test_pool().await;
+        let app = test_router(pool);
+
+        let body = signup_form_body_with_names(
+            "   ",
+            "   ",
+            "whitespace@example.com",
+            "Password123",
+            "Password123",
+            None,
+        );
+        let request = http::Request::builder()
+            .method("POST")
+            .uri("/signup")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(body))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body_str = String::from_utf8_lossy(&body_bytes);
+        assert!(
+            body_str.contains("First name and last name are required"),
+            "Expected name required error, got: {}",
+            body_str
+        );
+    }
     }
 
     mod login {

@@ -168,10 +168,24 @@ pub async fn submit(
 ) -> Result<impl IntoResponse, Html<String>> {
     let next = safe_redirect_next(form.next.clone());
     // Validate form structure
-    if let Err(_) = form.validate() {
+    if form.validate().is_err() {
         let template = SignupTemplate {
             app_name: APP_NAME,
-            error: "Invalid form data".to_string(),
+            error: "First name and last name are required (1–100 characters each).".to_string(),
+            first_name: form.first_name.clone(),
+            last_name: form.last_name.clone(),
+            email: form.email.clone(),
+            next: next.clone(),
+        };
+        return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
+    }
+
+    let first = form.first_name.trim();
+    let last = form.last_name.trim();
+    if first.is_empty() || last.is_empty() {
+        let template = SignupTemplate {
+            app_name: APP_NAME,
+            error: "First name and last name are required.".to_string(),
             first_name: form.first_name.clone(),
             last_name: form.last_name.clone(),
             email: form.email.clone(),
@@ -212,7 +226,7 @@ pub async fn submit(
     };
 
     // Create account
-    match create_account(&state.db, &form.first_name, &form.last_name, &email, &password).await {
+    match create_account(&state.db, first, last, &email, &password).await {
         Ok((_user_id, token)) => {
             let verify_path = if next.is_empty() {
                 format!("/verify-email?token={}", token)

@@ -26,12 +26,29 @@ pub async fn ensure_graph_seeds(pool: &SqlitePool) {
 }
 
 pub fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
-    format!(
-        "first_name=Test&last_name=User&email={}&password={}&confirm_password={}",
+    signup_form_body_with_names("Test", "User", email, password, confirm_password, None)
+}
+
+pub fn signup_form_body_with_names(
+    first_name: &str,
+    last_name: &str,
+    email: &str,
+    password: &str,
+    confirm_password: &str,
+    next: Option<&str>,
+) -> String {
+    let base = format!(
+        "first_name={}&last_name={}&email={}&password={}&confirm_password={}",
+        urlencoding::encode(first_name),
+        urlencoding::encode(last_name),
         urlencoding::encode(email),
         urlencoding::encode(password),
         urlencoding::encode(confirm_password)
-    )
+    );
+    match next {
+        Some(n) => format!("{}&next={}", base, urlencoding::encode(n)),
+        None => base,
+    }
 }
 
 pub fn login_form_body(email: &str, password: &str) -> String {

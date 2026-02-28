@@ -16,15 +16,6 @@ fn invite_form_body(email: &str, role: &str) -> String {
     )
 }
 
-fn signup_form_body_with_next(email: &str, password: &str, confirm_password: &str, next: &str) -> String {
-    format!(
-        "first_name=Test&last_name=User&email={}&password={}&confirm_password={}&next={}",
-        urlencoding::encode(email),
-        urlencoding::encode(password),
-        urlencoding::encode(confirm_password),
-        urlencoding::encode(next)
-    )
-}
 
 #[tokio::test]
 async fn organization_settings_requires_authentication() {
@@ -256,7 +247,7 @@ async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
 
     // New flow: signup with next → verify-email → confirm
     let next = format!("/accept-invite/confirm?token={}", urlencoding::encode(&token));
-    let signup_body = signup_form_body_with_next("newbie@example.com", "Password123", "Password123", &next);
+    let signup_body = signup_form_body_with_names("Test", "User", "newbie@example.com", "Password123", "Password123", Some(&next));
     let signup_request = http::Request::builder()
         .method("POST")
         .uri("/signup")
@@ -361,7 +352,7 @@ async fn accept_invite_as_new_user_then_app_accessible() {
 
     // New flow: signup with next → verify-email → confirm
     let next = format!("/accept-invite/confirm?token={}", urlencoding::encode(&token));
-    let signup_body = signup_form_body_with_next("teammate@example.com", "Password123", "Password123", &next);
+    let signup_body = signup_form_body_with_names("Test", "User", "teammate@example.com", "Password123", "Password123", Some(&next));
     let signup_request = http::Request::builder()
         .method("POST")
         .uri("/signup")

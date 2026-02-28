@@ -55,12 +55,6 @@ seed:
 seed-force:
 	cargo run --bin seed -- --force-all
 
-# Manual backfill: set empty/NULL first_name and last_name to "John Doe". Local dev only (prod has no such users).
-backfill-user-names:
-	sqlite3 $(APP_NAME).db "UPDATE users SET first_name = 'John' WHERE first_name IS NULL OR trim(first_name) = '' OR first_name = 'User';"
-	sqlite3 $(APP_NAME).db "UPDATE users SET last_name = 'Doe' WHERE last_name IS NULL OR trim(last_name) = '' OR last_name = 'User';"
-	@echo "Backfilled user names to John Doe."
-
 # Fix migration state if you had the old user-names backfill migration applied. Run once, then make migrate.
 migrate-fix-user-names:
 	sqlite3 $(APP_NAME).db "DELETE FROM _sqlx_migrations WHERE version = 20260228000000;" 2>/dev/null || true
