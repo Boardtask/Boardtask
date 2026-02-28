@@ -86,6 +86,69 @@ async fn create_invite_as_owner_succeeds_and_creates_db_row() {
 }
 
 #[tokio::test]
+async fn create_invite_same_email_different_role_cancels_previous_and_creates_new() {
+    let (cookie, _project_id, pool, app, _) = setup_user_and_project("owner2@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+    let user = boardtask::app::db::users::find_by_id(
+        &pool,
+        &boardtask::app::domain::UserId::from_string(&user_id).unwrap(),
+    )
+    .await
+    .unwrap()
+    .expect("user exists");
+    let org_id = boardtask::app::domain::OrganizationId::from_string(&user.organization_id).unwrap();
+
+    // First invite: member
+    let body1 = invite_form_body("resend@example.com", "member");
+    let request1 = http::Request::builder()
+        .method("POST")
+        .uri("/app/settings/organization/invite")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(body1))
+        .unwrap();
+    let response1 = app.clone().oneshot(request1).await.unwrap();
+    assert_eq!(response1.status(), http::StatusCode::SEE_OTHER);
+    let location1 = response1.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("");
+    assert!(location1.contains("success="), "Expected success param, got: {}", location1);
+
+    let pending_after_first = boardtask::app::db::organization_invites::list_pending_for_org(&pool, &org_id)
+        .await
+        .unwrap();
+    assert_eq!(pending_after_first.len(), 1);
+    assert_eq!(pending_after_first[0].email, "resend@example.com");
+    assert_eq!(pending_after_first[0].role, "member");
+    let old_token = pending_after_first[0].token.clone();
+
+    // Second invite: same email, different role (admin) — should cancel previous and create new
+    let body2 = invite_form_body("resend@example.com", "admin");
+    let request2 = http::Request::builder()
+        .method("POST")
+        .uri("/app/settings/organization/invite")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(body2))
+        .unwrap();
+    let response2 = app.oneshot(request2).await.unwrap();
+    assert_eq!(response2.status(), http::StatusCode::SEE_OTHER);
+    let location2 = response2.headers().get("location").and_then(|v| v.to_str().ok()).unwrap_or("");
+    assert!(location2.contains("/app/settings/organization"), "Expected redirect to org settings, got: {}", location2);
+    assert!(location2.contains("success="), "Expected success param, got: {}", location2);
+
+    let pending_after_second = boardtask::app::db::organization_invites::list_pending_for_org(&pool, &org_id)
+        .await
+        .unwrap();
+    assert_eq!(pending_after_second.len(), 1, "Should have exactly one pending invite after resend");
+    assert_eq!(pending_after_second[0].email, "resend@example.com");
+    assert_eq!(pending_after_second[0].role, "admin", "Role should be the new role from second invite");
+    assert_ne!(
+        pending_after_second[0].token,
+        old_token,
+        "Token should be new after cancel-and-resend"
+    );
+}
+
+#[tokio::test]
 async fn accept_invite_new_user_get_shows_signup_link_no_password_form() {
     let (cookie, _project_id, pool, app, _) = setup_user_and_project("owner@example.com", "Password123").await;
     let user_id = user_id_from_cookie(&pool, &cookie).await;

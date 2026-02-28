@@ -193,13 +193,19 @@ pub async fn create_invite(
         }
     }
 
-    // Already a pending invite?
-    if db::organization_invites::find_pending_by_org_and_email(&state.db, &org_id, &email_str)
+    // Already a pending invite? Cancel it and we'll create a new one below.
+    let mut resend = false;
+    let existing = db::organization_invites::find_pending_by_org_and_email(&state.db, &org_id, &email_str)
         .await
-        .unwrap_or(None)
-        .is_some()
-    {
-        return invite_redirect_error("An invite has already been sent to that email.").into_response();
+        .unwrap_or(None);
+    if let Some(existing_invite) = existing {
+        if db::organization_invites::delete_by_id(&state.db, &existing_invite.id)
+            .await
+            .is_err()
+        {
+            return invite_redirect_error("Failed to update invite.").into_response();
+        }
+        resend = true;
     }
 
     let now = OffsetDateTime::now_utc().unix_timestamp();
@@ -247,7 +253,12 @@ pub async fn create_invite(
         return invite_redirect_error("Invite created but we couldn't send the email. Please try again.").into_response();
     }
 
-    invite_redirect_success("Invite sent.").into_response()
+    let success_msg = if resend {
+        "Previous invite cancelled; new invite sent."
+    } else {
+        "Invite sent."
+    };
+    invite_redirect_success(success_msg).into_response()
 }
 
 pub fn routes() -> Router<AppState> {
