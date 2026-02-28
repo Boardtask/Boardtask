@@ -368,6 +368,7 @@ function createConnectionPort() {
         }
 
         try {
+            Alpine.store('projectAction', { active: true, label: 'Updating...' });
             await graph.api(`/api/projects/${graph.projectId}/edges`, 'POST', {
                 parent_id: sourceId,
                 child_id: targetId
@@ -378,6 +379,8 @@ function createConnectionPort() {
             graph.recomputeMutedForGraph();
         } catch (error) {
             alert(`Error connecting nodes: ${error.message}`);
+        } finally {
+            Alpine.store('projectAction', { active: false, label: '' });
         }
     }
 
@@ -442,6 +445,7 @@ function createRemoveNode() {
         if (nodes.length === 0) return;
 
         try {
+            Alpine.store('projectAction', { active: true, label: 'Deleting...' });
             let needReload = false;
             for (const node of nodes) {
                 const id = node.id();
@@ -473,6 +477,8 @@ function createRemoveNode() {
             }
         } catch (error) {
             alert(`Error removing node: ${error.message}`);
+        } finally {
+            Alpine.store('projectAction', { active: false, label: '' });
         }
     }
 
@@ -488,6 +494,7 @@ const registerGraph = () => {
     if (!window.Alpine) return;
 
     Alpine.store('projectFlash', { show: false, message: '' });
+    Alpine.store('projectAction', { active: false, label: '' });
 
     if (Alpine.data('graph')) return;
     if (Alpine.data('projectList')) return;
@@ -639,6 +646,7 @@ const registerGraph = () => {
             const slotIdForApi = (this.editingNode.slot_id != null && this.editingNode.slot_id !== '') ? this.editingNode.slot_id : null;
             const assignedUserIdForApi = (this.editingNode.assigned_user_id != null && this.editingNode.assigned_user_id !== '') ? this.editingNode.assigned_user_id : null;
             try {
+                Alpine.store('projectAction', { active: true, label: 'Saving...' });
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
                     description: this.editingNode.description,
@@ -653,6 +661,7 @@ const registerGraph = () => {
             } catch (err) {
                 alert(err.message || 'Failed to save');
             } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
                 this.saving = false;
             }
         }
@@ -1143,6 +1152,7 @@ const registerGraph = () => {
 
         async addNode() {
             try {
+                Alpine.store('projectAction', { active: true, label: 'Creating...' });
                 const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
@@ -1164,6 +1174,8 @@ const registerGraph = () => {
                 this.runLayout({ fit: true });
             } catch (error) {
                 alert(`Error adding node: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1197,6 +1209,7 @@ const registerGraph = () => {
             if (taskIds.length === 0) return;
 
             try {
+                Alpine.store('projectAction', { active: true, label: 'Updating...' });
                 if (this.isTemporaryGroupNode(groupId)) {
                     const groupNode = this.cy.$id(groupId);
                     if (!groupNode.length) return;
@@ -1244,6 +1257,8 @@ const registerGraph = () => {
                 this.runLayout();
             } catch (error) {
                 alert(`Error adding to group: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1257,6 +1272,7 @@ const registerGraph = () => {
             if (this.selectedNodeIds.length === 0) return;
             const parentsToCheck = new Set();
             try {
+                Alpine.store('projectAction', { active: true, label: 'Updating...' });
                 for (const id of this.selectedNodeIds) {
                     const node = this.cy.$id(id);
                     if (node.length && node.parent().length) {
@@ -1279,6 +1295,8 @@ const registerGraph = () => {
                 this.runLayout();
             } catch (error) {
                 alert(`Error removing from group: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1297,6 +1315,7 @@ const registerGraph = () => {
             const groupId = parentNode.length && parentNode.parent().length ? parentNode.parent().id() : null;
 
             try {
+                Alpine.store('projectAction', { active: true, label: 'Creating...' });
                 const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
@@ -1353,6 +1372,8 @@ const registerGraph = () => {
                 };
             } catch (error) {
                 alert(`Error adding child node: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1361,6 +1382,7 @@ const registerGraph = () => {
             const childId = this.selectedNodeIds[this.selectedNodeIds.length - 1];
 
             try {
+                Alpine.store('projectAction', { active: true, label: 'Creating...' });
                 const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/nodes`, 'POST', {
@@ -1415,6 +1437,8 @@ const registerGraph = () => {
                 };
             } catch (error) {
                 alert(`Error adding parent node: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1429,6 +1453,7 @@ const registerGraph = () => {
                 const n1IsGroup = this.isGroupNode(n1);
                 const n2IsGroup = this.isGroupNode(n2);
                 try {
+                    Alpine.store('projectAction', { active: true, label: 'Updating...' });
                     await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
                         parent_id: n1,
                         child_id: n2
@@ -1441,6 +1466,8 @@ const registerGraph = () => {
                     }
                 } catch (error) {
                     alert(`Error disconnecting nodes: ${error.message}`);
+                } finally {
+                    Alpine.store('projectAction', { active: false, label: '' });
                 }
                 return;
             }
@@ -1452,6 +1479,7 @@ const registerGraph = () => {
             const n2IsGroup = this.isGroupNode(n2);
 
             try {
+                Alpine.store('projectAction', { active: true, label: 'Updating...' });
                 await this.api(`/api/projects/${this.projectId}/edges`, 'DELETE', {
                     parent_id: n1,
                     child_id: n2
@@ -1464,6 +1492,8 @@ const registerGraph = () => {
                 }
             } catch (error) {
                 alert(`Error disconnecting nodes: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1482,6 +1512,7 @@ const registerGraph = () => {
             const groupId = childNode.parent().length ? childNode.parent().id() : null;
 
             try {
+                Alpine.store('projectAction', { active: true, label: 'Creating...' });
                 const title = DEFAULTS.NODE_TITLE;
 
                 const node = await this.api(`/api/projects/${this.projectId}/edges/insert-between`, 'POST', {
@@ -1544,6 +1575,8 @@ const registerGraph = () => {
                 this.refreshNodeLabels();
             } catch (error) {
                 alert(`Error inserting node between: ${error.message}`);
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1562,8 +1595,13 @@ const registerGraph = () => {
                     this.cy.$id(id).data('label', this.editingNode.title);
                     this.groupListVersion++;
                 } else {
-                    await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { title: this.editingNode.title });
-                    this.cy.$id(id).data('label', this.editingNode.title);
+                    try {
+                        Alpine.store('projectAction', { active: true, label: 'Saving...' });
+                        await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'PATCH', { title: this.editingNode.title });
+                        this.cy.$id(id).data('label', this.editingNode.title);
+                    } finally {
+                        Alpine.store('projectAction', { active: false, label: '' });
+                    }
                 }
                 this.refreshNodeLabels();
                 this.editingNode = null;
@@ -1583,6 +1621,7 @@ const registerGraph = () => {
             const slotIdForApi = (this.editingNode.slot_id != null && this.editingNode.slot_id !== '') ? this.editingNode.slot_id : null;
             const assignedUserIdForApi = (this.editingNode.assigned_user_id != null && this.editingNode.assigned_user_id !== '') ? this.editingNode.assigned_user_id : null;
             try {
+                Alpine.store('projectAction', { active: true, label: 'Saving...' });
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
                     description: this.editingNode.description,
@@ -1635,6 +1674,7 @@ const registerGraph = () => {
             } catch (error) {
                 alert(`Error saving node: ${error.message}`);
             } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
                 this.saving = false;
             }
         },
@@ -1735,12 +1775,15 @@ const registerGraph = () => {
             }
             this.slotError = '';
             try {
+                Alpine.store('projectAction', { active: true, label: 'Saving...' });
                 await this.updateSlot(this.editingSlotId, name, this.editingSlotAssignedUserId);
                 this.editingSlotId = null;
                 this.editingSlotName = '';
                 this.editingSlotAssignedUserId = '';
             } catch (e) {
                 this.slotError = e.message || 'Failed to update slot';
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1752,6 +1795,7 @@ const registerGraph = () => {
             }
             this.slotError = '';
             try {
+                Alpine.store('projectAction', { active: true, label: 'Saving...' });
                 await this.api(`/api/projects/${this.projectId}/slots`, 'POST', {
                     name,
                     assigned_user_id: this.newSlotAssignedUserId || null
@@ -1761,6 +1805,8 @@ const registerGraph = () => {
                 this.newSlotAssignedUserId = '';
             } catch (e) {
                 this.slotError = e.message || 'Failed to add slot';
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
@@ -1777,10 +1823,13 @@ const registerGraph = () => {
         async deleteSlot(slotId) {
             if (!confirm('Delete this slot? Nodes using it will have their slot cleared.')) return;
             try {
+                Alpine.store('projectAction', { active: true, label: 'Deleting...' });
                 await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'DELETE');
                 await this.fetchProjectSlots();
             } catch (e) {
                 this.slotError = e.message || 'Failed to delete slot';
+            } finally {
+                Alpine.store('projectAction', { active: false, label: '' });
             }
         },
 
