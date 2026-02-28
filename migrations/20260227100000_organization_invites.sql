@@ -7,9 +7,7 @@ CREATE TABLE IF NOT EXISTS organization_invites (
     invited_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token TEXT NOT NULL UNIQUE,
     expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
-    FOREIGN KEY (invited_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_organization_invites_token ON organization_invites(token);
 CREATE INDEX IF NOT EXISTS idx_organization_invites_organization_id ON organization_invites(organization_id);
