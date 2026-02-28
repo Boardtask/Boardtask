@@ -2,11 +2,12 @@
 pub const ALLOWED_IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp"];
 
 /// Check that a trimmed, non-empty URL uses the HTTPS scheme.
+/// Case-insensitive to align with the form regex validator (e.g. HTTPS://, HtTpS://).
 ///
 /// This does not trim or handle empties itself; callers should decide whether
 /// empty/whitespace-only values are allowed and pass a trimmed string.
 pub fn check_https_scheme(t: &str) -> Result<(), &'static str> {
-    if t.starts_with("https://") {
+    if t.len() >= 8 && t[..8].eq_ignore_ascii_case("https://") {
         Ok(())
     } else {
         Err("URL must use HTTPS.")

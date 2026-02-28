@@ -74,4 +74,10 @@ mod tests {
         assert!(ProfileImageUrl::new("https://example.com/a.webp").is_ok());
         assert!(ProfileImageUrl::new("https://example.com/b.gif").is_ok());
     }
+
+    #[test]
+    fn accepts_uppercase_https() {
+        let url = ProfileImageUrl::new("HTTPS://example.com/photo.jpg").unwrap();
+        assert_eq!(url.as_str(), "HTTPS://example.com/photo.jpg");
+    }
 }
