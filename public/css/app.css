@@ -3282,6 +3282,8 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 .cy-node__status--done { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; background-color: #6BAF92; color: #ffffff; border: 1px solid rgba(107, 175, 146, 0.3); }
 .cy-node__status--done .cy-node__status-check { width: 12px; height: 12px; color: #ffffff; flex-shrink: 0; }
 .cy-node__slot { }
+.cy-node__slot--avatar { display: flex; align-items: center; justify-content: flex-end; flex: 1; flex-shrink: 0; min-width: 0; }
+.cy-node__avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .cy-node__estimate { }
 .cy-node--done { background: #fcfbfb; }
 .cy-node__content { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; height: 100%; min-width: 0; }

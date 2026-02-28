@@ -1967,3 +1967,86 @@ mod get_graph {
         assert_eq!(edge["child_id"], node2_id);
     }
 }
+
+mod get_project_members {
+    use super::*;
+
+    #[tokio::test]
+    async fn get_project_members_requires_authentication() {
+        let pool = test_pool().await;
+        let app = test_router(pool);
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri("/api/projects/123/members")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["error"], "Unauthorized");
+    }
+
+    #[tokio::test]
+    async fn get_project_members_succeeds() {
+        let (cookie, project_id, _pool, app, _) = setup_user_and_project("members@example.com", "Password123").await;
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/members", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+        assert!(body["members"].is_array());
+        let members = body["members"].as_array().unwrap();
+        assert!(!members.is_empty());
+
+        let member = &members[0];
+        assert!(member["user_id"].is_string());
+        assert!(member["email"].is_string());
+        assert!(member["first_name"].is_string());
+        assert!(member["last_name"].is_string());
+        assert!(member["profile_image_url"].is_null() || member["profile_image_url"].is_string());
+    }
+
+    #[tokio::test]
+    async fn get_project_members_includes_profile_image_url_when_set() {
+        use boardtask::app::domain::{ProfileImageUrl, UserId};
+
+        let (cookie, project_id, pool, app, _) = setup_user_and_project("avatar-member@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+        let user_id_type = UserId::from_string(&user_id).unwrap();
+
+        let url = ProfileImageUrl::new("https://example.com/avatar.png").unwrap();
+        boardtask::app::db::users::update_profile_image_url(&pool, &user_id_type, Some(&url))
+            .await
+            .unwrap();
+
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/members", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::OK);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+
+        let members = body["members"].as_array().unwrap();
+        let member = members.iter().find(|m| m["user_id"] == user_id).expect("current user in members");
+        assert_eq!(member["profile_image_url"], "https://example.com/avatar.png");
+    }
+}

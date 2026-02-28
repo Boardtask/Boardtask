@@ -14,13 +14,14 @@ use crate::app::{
     AppState,
 };
 
-/// Member row for assignee dropdown (user_id, display name, email).
+/// Member row for assignee dropdown (user_id, display name, email, profile image).
 #[derive(Debug, Serialize)]
 pub struct ProjectMemberItem {
     pub user_id: String,
     pub email: String,
     pub first_name: String,
     pub last_name: String,
+    pub profile_image_url: Option<String>,
 }
 
 /// Response for listing project org members.
@@ -47,6 +48,7 @@ pub async fn get_project_members(
             email: r.email,
             first_name: r.first_name,
             last_name: r.last_name,
+            profile_image_url: r.profile_image_url,
         })
         .collect();
 

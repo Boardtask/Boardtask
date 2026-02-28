@@ -58,6 +58,7 @@ function buildCyNodeElement(node, options) {
         nodeTypes,
         taskStatuses,
         projectSlots,
+        projectMembers = [],
         progressFilter,
         matchesProgressFilter,
         parentNode = null,
@@ -69,6 +70,7 @@ function buildCyNodeElement(node, options) {
     const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
     const status = taskStatuses.find(s => s.id === statusId);
     const slot = projectSlots.find(s => s.id === (node.slot_id || ''));
+    const assignee = projectMembers.find(m => m.user_id === (node.assigned_user_id || ''));
 
     let muted;
     if (mutedOverride != null) {
@@ -104,7 +106,9 @@ function buildCyNodeElement(node, options) {
             muted: !!muted,
             filteredOut: !!filteredOut,
             created_at: node.created_at,
-            assigned_user_id: node.assigned_user_id ?? ''
+            assigned_user_id: node.assigned_user_id ?? '',
+            assigned_user_profile_image_url: assignee?.profile_image_url ?? '',
+            assigned_user_name: assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : ''
         }
     };
 }
@@ -169,13 +173,17 @@ function buildNodeLabelHtml(data, opts) {
         ? `<div class="cy-node__status cy-node__status--done">${checkmarkSvg}<span>Done</span></div>`
         : (statusName ? `<div class="cy-node__status block text-10 font-sans font-bold text-taupe">${statusName}</div>` : '');
     const slotName = escapeHtml(data.slot_name || '');
-    const slotHtml = slotName ? `<div class="cy-node__slot block text-10 font-sans font-bold text-taupe min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right flex-1" title="${slotName}">${slotName}</div>` : '';
+    const avatarUrl = data.assigned_user_profile_image_url || '';
+    const avatarTitle = escapeHtml(data.assigned_user_name || 'Assigned');
+    const headerRightHtml = avatarUrl
+        ? `<div class="cy-node__slot cy-node__slot--avatar"><img src="${escapeHtml(avatarUrl)}" alt="" class="cy-node__avatar" title="${avatarTitle}" /></div>`
+        : (slotName ? `<div class="cy-node__slot block text-10 font-sans font-bold text-taupe min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right flex-1" title="${slotName}">${slotName}</div>` : '');
     const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
     const estimateStr = escapeHtml(estimateStrRaw);
     const estimateHtml = estimateStr ? `<div class="cy-node__estimate block text-10 font-sans font-bold text-taupe">${estimateStr}</div>` : '';
     const typeClass = ' cy-node--' + typeSlug;
     const warningClass = isBlocked ? ' cy-node--warning' : '';
-    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !isDone) ? ' cy-node--compact' : '';
+    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !avatarUrl && !isDone) ? ' cy-node--compact' : '';
     const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
     const filteredClass = (opts.filteredOut) ? ' cy-node--filtered' : '';
     const doneClass = isDone ? ' cy-node--done' : '';
@@ -186,7 +194,7 @@ function buildNodeLabelHtml(data, opts) {
                                 <div class="cy-node__content">
                                     <div class="cy-node__header">
                                         <span class="cy-node__type" style="color: ${typeColor};">${typeName}</span>
-                                        ${slotHtml}
+                                        ${headerRightHtml}
                                     </div>
                                     <div class="cy-node__label${isDone ? ' cy-node__label--done' : ''}">${label}</div>
                                     <div class="cy-node__meta">${statusHtml}${estimateHtml}</div>
@@ -740,6 +748,7 @@ const registerGraph = () => {
                         const type = this.nodeTypes.find(t => t.id === n.node_type_id);
                         const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         const slot = this.projectSlots.find(s => s.id === (n.slot_id || ''));
+                        const assignee = this.projectMembers.find(m => m.user_id === (n.assigned_user_id || ''));
                         const root = isRoot(n.id);
                         const statusId = n.status_id ?? DEFAULTS.STATUS_ID;
                         const selfDone = statusId === DONE_STATUS_ID;
@@ -768,7 +777,9 @@ const registerGraph = () => {
                                 isGroup: isGroupNode,
                                 groupEmpty: isGroupNode ? false : undefined,
                                 created_at: n.created_at,
-                                assigned_user_id: n.assigned_user_id ?? ''
+                                assigned_user_id: n.assigned_user_id ?? '',
+                                assigned_user_profile_image_url: assignee?.profile_image_url ?? '',
+                                assigned_user_name: assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : ''
                             }
                         };
                     }),
@@ -904,6 +915,7 @@ const registerGraph = () => {
                     nodeTypes: this.nodeTypes,
                     taskStatuses: this.taskStatuses,
                     projectSlots: this.projectSlots,
+                    projectMembers: this.projectMembers,
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     mutedOverride: false
@@ -1063,6 +1075,7 @@ const registerGraph = () => {
                     nodeTypes: this.nodeTypes,
                     taskStatuses: this.taskStatuses,
                     projectSlots: this.projectSlots,
+                    projectMembers: this.projectMembers,
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
@@ -1125,6 +1138,7 @@ const registerGraph = () => {
                     nodeTypes: this.nodeTypes,
                     taskStatuses: this.taskStatuses,
                     projectSlots: this.projectSlots,
+                    projectMembers: this.projectMembers,
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     mutedOverride: false
@@ -1268,6 +1282,7 @@ const registerGraph = () => {
                     nodeTypes: this.nodeTypes,
                     taskStatuses: this.taskStatuses,
                     projectSlots: this.projectSlots,
+                    projectMembers: this.projectMembers,
                     progressFilter: this.progressFilter,
                     matchesProgressFilter: this.matchesProgressFilter.bind(this),
                     parentNode,
@@ -1407,6 +1422,9 @@ const registerGraph = () => {
                 cyNode.data('slot_id', this.editingNode.slot_id || '');
                 cyNode.data('slot_name', slot ? slot.name : '');
                 cyNode.data('assigned_user_id', this.editingNode.assigned_user_id || '');
+                const assignee = this.projectMembers.find(m => m.user_id === (this.editingNode.assigned_user_id || ''));
+                cyNode.data('assigned_user_profile_image_url', assignee?.profile_image_url ?? '');
+                cyNode.data('assigned_user_name', assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : '');
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.recomputeMutedForGraph();
