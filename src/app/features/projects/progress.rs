@@ -89,6 +89,7 @@ mod tests {
             estimated_minutes: None,
             slot_id: None,
             parent_id: parent_id.map(String::from),
+            assigned_user_id: None,
         }
     }
 

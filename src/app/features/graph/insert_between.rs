@@ -10,6 +10,7 @@ use validator::Validate;
 
 use crate::app::{
     db,
+    domain::{OrganizationId, UserId},
     error::AppError,
     session::ApiAuthenticatedSession,
     AppState,
@@ -34,6 +35,8 @@ pub struct InsertBetweenRequest {
     pub status_id: Option<String>,
     /// Optional slot assignment for the new node.
     pub slot_id: Option<String>,
+    /// Optional assignee (user) for the new node. Must be org member.
+    pub assigned_user_id: Option<String>,
     /// Optional grouping parent (compound/group node id) for the new node.
     pub group_id: Option<String>,
 }
@@ -95,6 +98,24 @@ pub async fn insert_between(
         }
     };
 
+    // Validate assigned_user_id is org member when provided.
+    let assigned_user_id = match &request.assigned_user_id {
+        None => None,
+        Some(uid) => {
+            let user_id = UserId::from_string(uid)
+                .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+            let org_id = OrganizationId::from_string(&project.organization_id)
+                .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+            let is_member = db::organizations::is_member(&state.db, &org_id, &user_id).await?;
+            if !is_member {
+                return Err(AppError::Validation(
+                    "User is not a member of this organization".to_string(),
+                ));
+            }
+            Some(uid.clone())
+        }
+    };
+
     // Validate optional group_id (used as node.parent_id) refers to a node in this project.
     let group_parent_id = match &request.group_id {
         None => None,
@@ -138,6 +159,7 @@ pub async fn insert_between(
         estimated_minutes: None,
         slot_id,
         parent_id: group_parent_id,
+        assigned_user_id,
     };
 
     // Transactionally: insert node, delete old edge, add two new edges.
@@ -186,6 +208,7 @@ pub async fn insert_between(
         estimated_minutes: node.estimated_minutes,
         slot_id: node.slot_id,
         parent_id: node.parent_id,
+        assigned_user_id: node.assigned_user_id,
     };
 
     Ok((StatusCode::CREATED, Json(response)))

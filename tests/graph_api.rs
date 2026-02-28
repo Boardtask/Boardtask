@@ -256,6 +256,59 @@ async fn post_node_with_slot_id_succeeds() {
 }
 
 #[tokio::test]
+async fn post_node_with_assigned_user_id_succeeds() {
+    let (cookie, project_id, pool, app, _) = setup_user_and_project("assignee@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Node with assignee",
+        "assigned_user_id": user_id
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::CREATED);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["assigned_user_id"], user_id);
+}
+
+#[tokio::test]
+async fn post_node_invalid_assigned_user_id_returns_error() {
+    let (cookie, project_id, _pool, app, _) = setup_user_and_project("invassignee@example.com", "Password123").await;
+
+    let request_body = serde_json::json!({
+        "node_type_id": TASK_NODE_TYPE_ID,
+        "title": "Test Node",
+        "assigned_user_id": "invalid-ulid"
+    });
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/nodes", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(request_body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid assigned_user_id");
+}
+
+#[tokio::test]
 async fn post_node_invalid_slot_id_returns_error() {
     let (cookie, project_id, _pool, app, _) = setup_user_and_project("invslot@example.com", "Password123").await;
 
@@ -452,6 +505,7 @@ async fn post_node_parent_id_from_other_project_returns_error() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
@@ -559,6 +613,7 @@ async fn post_node_with_status_then_patch_and_get_graph() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         let b = db::nodes::NewNode {
@@ -570,6 +625,7 @@ async fn post_node_with_status_then_patch_and_get_graph() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         let c = db::nodes::NewNode {
@@ -581,6 +637,7 @@ async fn post_node_with_status_then_patch_and_get_graph() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
 
@@ -682,6 +739,7 @@ async fn post_node_with_status_then_patch_and_get_graph() {
                 description: None,
                 estimated_minutes: None,
                 slot_id: None,
+                assigned_user_id: None,
                 parent_id: None,
             };
             boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -779,6 +837,7 @@ async fn post_node_with_status_then_patch_and_get_graph() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -837,6 +896,7 @@ mod patch_node {
             description: None,
             estimated_minutes: Some(30),
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -920,6 +980,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -1020,6 +1081,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -1039,6 +1101,73 @@ mod patch_node {
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(body["error"], "Invalid slot_id");
+    }
+
+    #[tokio::test]
+    async fn patch_node_set_assigned_user_id_then_clear() {
+        let (cookie, project_id, pool, app, _) = setup_user_and_project("patchassignee@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+        let node_id = ulid::Ulid::new().to_string();
+        let node = db::nodes::NewNode {
+            id: node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Node".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            assigned_user_id: None,
+            parent_id: None,
+        };
+        boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
+
+        let patch_body = serde_json::json!({ "assigned_user_id": user_id });
+        let patch_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(patch_body.to_string()))
+            .unwrap();
+
+        let patch_response = app.clone().oneshot(patch_request).await.unwrap();
+        assert_eq!(patch_response.status(), http::StatusCode::OK);
+
+        let patch_res_bytes = patch_response.into_body().collect().await.unwrap().to_bytes();
+        let patch_res: serde_json::Value = serde_json::from_slice(&patch_res_bytes).unwrap();
+        assert_eq!(patch_res["assigned_user_id"], user_id);
+
+        let get_request = http::Request::builder()
+            .method("GET")
+            .uri(&format!("/api/projects/{}/graph", project_id))
+            .header("cookie", &cookie)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let get_response = app.clone().oneshot(get_request).await.unwrap();
+        assert_eq!(get_response.status(), http::StatusCode::OK);
+        let get_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+        let graph: serde_json::Value = serde_json::from_slice(&get_bytes).unwrap();
+        let nodes = graph["nodes"].as_array().unwrap();
+        let updated_node = nodes.iter().find(|n| n["id"] == node_id).unwrap();
+        assert_eq!(updated_node["assigned_user_id"], user_id);
+
+        let clear_body = serde_json::json!({ "assigned_user_id": null });
+        let clear_request = http::Request::builder()
+            .method("PATCH")
+            .uri(&format!("/api/projects/{}/nodes/{}", project_id, node_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(clear_body.to_string()))
+            .unwrap();
+
+        let clear_response = app.clone().oneshot(clear_request).await.unwrap();
+        assert_eq!(clear_response.status(), http::StatusCode::OK);
+
+        let clear_res_bytes = clear_response.into_body().collect().await.unwrap().to_bytes();
+        let clear_res: serde_json::Value = serde_json::from_slice(&clear_res_bytes).unwrap();
+        assert!(clear_res["assigned_user_id"].is_null());
     }
 
     #[tokio::test]
@@ -1149,6 +1278,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -1187,6 +1317,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
@@ -1218,6 +1349,7 @@ mod patch_node {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
@@ -1285,6 +1417,7 @@ async fn post_edge_succeeds() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     let child_node = db::nodes::NewNode {
@@ -1296,6 +1429,7 @@ async fn post_edge_succeeds() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
 
@@ -1340,6 +1474,7 @@ async fn post_edge_rejects_self_referential() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &node).await.unwrap();
@@ -1380,6 +1515,7 @@ async fn post_edge_duplicate_returns_conflict_or_error() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     let child_node = db::nodes::NewNode {
@@ -1391,6 +1527,7 @@ async fn post_edge_duplicate_returns_conflict_or_error() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
@@ -1441,6 +1578,7 @@ async fn post_edge_404_when_node_not_in_project() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &project_node).await.unwrap();
@@ -1473,6 +1611,7 @@ async fn post_edge_404_when_node_not_in_project() {
         description: None,
         estimated_minutes: None,
         slot_id: None,
+        assigned_user_id: None,
         parent_id: None,
     };
     boardtask::app::db::nodes::insert(&pool, &other_node).await.unwrap();
@@ -1519,6 +1658,7 @@ async fn post_edge_404_when_node_not_in_project() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         let child_node = db::nodes::NewNode {
@@ -1530,6 +1670,7 @@ async fn post_edge_404_when_node_not_in_project() {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
 
@@ -1601,6 +1742,75 @@ async fn post_edge_404_when_node_not_in_project() {
 
         assert!(has_parent_to_new, "expected edge parent -> new node");
         assert!(has_new_to_child, "expected edge new node -> child");
+    }
+
+    #[tokio::test]
+    async fn insert_between_with_assigned_user_id() {
+        let (cookie, project_id, pool, app, _) = setup_user_and_project("insertbetweenassignee@example.com", "Password123").await;
+        let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+        ensure_graph_seeds(&pool).await;
+
+        let parent_node_id = ulid::Ulid::new().to_string();
+        let child_node_id = ulid::Ulid::new().to_string();
+
+        let parent_node = db::nodes::NewNode {
+            id: parent_node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Parent".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            assigned_user_id: None,
+            parent_id: None,
+        };
+        let child_node = db::nodes::NewNode {
+            id: child_node_id.clone(),
+            project_id: project_id.clone(),
+            node_type_id: TASK_NODE_TYPE_ID.to_string(),
+            status_id: DEFAULT_STATUS_ID.to_string(),
+            title: "Child".to_string(),
+            description: None,
+            estimated_minutes: None,
+            slot_id: None,
+            assigned_user_id: None,
+            parent_id: None,
+        };
+
+        boardtask::app::db::nodes::insert(&pool, &parent_node).await.unwrap();
+        boardtask::app::db::nodes::insert(&pool, &child_node).await.unwrap();
+
+        let edge = db::node_edges::NewNodeEdge {
+            parent_id: parent_node_id.clone(),
+            child_id: child_node_id.clone(),
+        };
+        boardtask::app::db::node_edges::insert(&pool, &edge).await.unwrap();
+
+        let request_body = serde_json::json!({
+            "parent_id": parent_node_id,
+            "child_id": child_node_id,
+            "node_type_id": TASK_NODE_TYPE_ID,
+            "title": "Inserted with assignee",
+            "assigned_user_id": user_id
+        });
+
+        let request = http::Request::builder()
+            .method("POST")
+            .uri(&format!("/api/projects/{}/edges/insert-between", project_id))
+            .header("content-type", "application/json")
+            .header("cookie", &cookie)
+            .body(axum::body::Body::from(request_body.to_string()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), http::StatusCode::CREATED);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(body["assigned_user_id"], user_id);
+        assert_eq!(body["title"], "Inserted with assignee");
     }
 }
 
@@ -1695,6 +1905,7 @@ mod get_graph {
             description: Some("First node".to_string()),
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node1).await.unwrap();
@@ -1709,6 +1920,7 @@ mod get_graph {
             description: None,
             estimated_minutes: None,
             slot_id: None,
+            assigned_user_id: None,
             parent_id: None,
         };
         boardtask::app::db::nodes::insert(&pool, &node2).await.unwrap();

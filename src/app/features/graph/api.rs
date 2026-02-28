@@ -8,6 +8,7 @@ pub fn routes() -> Router<AppState> {
         .merge(crate::app::features::graph::get_graph::routes())
         .merge(crate::app::features::graph::get_node_types::routes())
         .merge(crate::app::features::graph::get_task_statuses::routes())
+        .merge(crate::app::features::graph::get_project_members::routes())
         .merge(crate::app::features::graph::slots::routes())
         .merge(crate::app::features::graph::create_node::routes())
         .merge(crate::app::features::graph::update_node::routes())

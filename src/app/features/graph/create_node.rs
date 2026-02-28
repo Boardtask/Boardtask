@@ -10,6 +10,7 @@ use validator::Validate;
 
 use crate::app::{
     db,
+    domain::{OrganizationId, UserId},
     error::AppError,
     session::ApiAuthenticatedSession,
     AppState,
@@ -26,6 +27,7 @@ pub struct CreateNodeRequest {
     pub status_id: Option<String>,
     pub slot_id: Option<String>,
     pub parent_id: Option<String>,
+    pub assigned_user_id: Option<String>,
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
     pub estimated_minutes: Option<i64>,
 }
@@ -44,16 +46,18 @@ pub struct NodeResponse {
     pub estimated_minutes: Option<i64>,
     pub slot_id: Option<String>,
     pub parent_id: Option<String>,
+    pub assigned_user_id: Option<String>,
 }
 
-/// Validates create-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id).
-/// Returns (node_type_id, status_id, slot_id, parent_id).
+/// Validates create-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id, assigned_user_id).
+/// Returns (node_type_id, status_id, slot_id, parent_id, assigned_user_id).
 async fn validate_create_node_request(
     request: &CreateNodeRequest,
     pool: &sqlx::SqlitePool,
     project_id: &str,
+    organization_id: &str,
     new_node_id: &str,
-) -> Result<(String, String, Option<String>, Option<String>), AppError> {
+) -> Result<(String, String, Option<String>, Option<String>, Option<String>), AppError> {
     request
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
@@ -101,11 +105,29 @@ async fn validate_create_node_request(
         }
     };
 
+    let assigned_user_id = match &request.assigned_user_id {
+        None => None,
+        Some(uid) => {
+            let user_id = UserId::from_string(uid)
+                .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+            let org_id = OrganizationId::from_string(organization_id)
+                .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+            let is_member = db::organizations::is_member(pool, &org_id, &user_id).await?;
+            if !is_member {
+                return Err(AppError::Validation(
+                    "User is not a member of this organization".to_string(),
+                ));
+            }
+            Some(uid.clone())
+        }
+    };
+
     Ok((
         request.node_type_id.clone(),
         status_id,
         slot_id,
         parent_id,
+        assigned_user_id,
     ))
 }
 
@@ -121,8 +143,8 @@ pub async fn create_node(
 
     // Generate ULID for node (needed for parent_id self-check)
     let node_id = Ulid::new().to_string();
-    let (node_type_id, status_id, slot_id, parent_id) =
-        validate_create_node_request(&request, &state.db, &project_id, &node_id).await?;
+    let (node_type_id, status_id, slot_id, parent_id, assigned_user_id) =
+        validate_create_node_request(&request, &state.db, &project_id, &project.organization_id, &node_id).await?;
 
     let new_node = db::nodes::NewNode {
         id: node_id.clone(),
@@ -134,6 +156,7 @@ pub async fn create_node(
         estimated_minutes: request.estimated_minutes,
         slot_id,
         parent_id,
+        assigned_user_id,
     };
 
     db::nodes::insert(&state.db, &new_node).await?;
@@ -154,6 +177,7 @@ pub async fn create_node(
         estimated_minutes: node.estimated_minutes,
         slot_id: node.slot_id,
         parent_id: node.parent_id,
+        assigned_user_id: node.assigned_user_id,
     };
 
     Ok((StatusCode::CREATED, Json(response)))

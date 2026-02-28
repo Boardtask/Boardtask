@@ -10,6 +10,7 @@ pub mod insert_between;
 pub mod helpers;
 pub mod types;
 pub mod get_node_types;
+pub mod get_project_members;
 pub mod get_task_statuses;
 pub mod slots;
 

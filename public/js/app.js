@@ -103,7 +103,8 @@ function buildCyNodeElement(node, options) {
             estimated_minutes: node.estimated_minutes ?? null,
             muted: !!muted,
             filteredOut: !!filteredOut,
-            created_at: node.created_at
+            created_at: node.created_at,
+            assigned_user_id: node.assigned_user_id ?? ''
         }
     };
 }
@@ -263,6 +264,7 @@ const registerGraph = () => {
         nodeTypes: [],
         taskStatuses: [],
         projectSlots: [],
+        projectMembers: [],
         editingNode: null,
         editingNodeOriginal: null,
         saving: false,
@@ -279,7 +281,8 @@ const registerGraph = () => {
             await Promise.all([
                 this.fetchNodeTypes(),
                 this.fetchTaskStatuses(),
-                this.fetchProjectSlots()
+                this.fetchProjectSlots(),
+                this.fetchProjectMembers()
             ]);
         },
 
@@ -310,6 +313,15 @@ const registerGraph = () => {
             } catch (_) {}
         },
 
+        async fetchProjectMembers() {
+            try {
+                const response = await fetch(`/api/projects/${this.projectId}/members`);
+                if (!response.ok) return;
+                const data = await response.json();
+                this.projectMembers = data.members || [];
+            } catch (_) {}
+        },
+
         openEdit(nodeId) {
             const node = this.tasksData.find(n => n.id === nodeId);
             if (!node) return;
@@ -321,6 +333,7 @@ const registerGraph = () => {
                 node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? node.node_type_id : DEFAULTS.NODE_TYPE,
                 status_id: node.status_id ?? DEFAULTS.STATUS_ID,
                 slot_id: node.slot_id ?? '',
+                assigned_user_id: (node.assigned_user_id != null && node.assigned_user_id !== '') ? node.assigned_user_id : '',
                 estimated_amount: amount,
                 estimated_unit: unit
             };
@@ -330,6 +343,7 @@ const registerGraph = () => {
                 node_type_id: String(this.editingNode.node_type_id ?? ''),
                 status_id: String(this.editingNode.status_id ?? ''),
                 slot_id: String(this.editingNode.slot_id ?? ''),
+                assigned_user_id: String(this.editingNode.assigned_user_id ?? ''),
                 estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
                 estimated_unit: String(this.editingNode.estimated_unit || 'hours')
             };
@@ -343,7 +357,7 @@ const registerGraph = () => {
             const eq = (a, b) => norm(a) === norm(b);
             return !eq(n.title, o.title) || !eq(n.description, o.description) ||
                 !eq(n.node_type_id, o.node_type_id) || !eq(n.status_id, o.status_id) ||
-                !eq(n.slot_id, o.slot_id) || !eq(n.estimated_amount, o.estimated_amount) ||
+                !eq(n.slot_id, o.slot_id) || !eq(n.assigned_user_id, o.assigned_user_id) || !eq(n.estimated_amount, o.estimated_amount) ||
                 !eq(n.estimated_unit, o.estimated_unit);
         },
 
@@ -389,6 +403,7 @@ const registerGraph = () => {
                 estimatedMinutes = unit === 'hours' ? Math.round(n * 60) : Math.round(n);
             }
             const slotIdForApi = (this.editingNode.slot_id != null && this.editingNode.slot_id !== '') ? this.editingNode.slot_id : null;
+            const assignedUserIdForApi = (this.editingNode.assigned_user_id != null && this.editingNode.assigned_user_id !== '') ? this.editingNode.assigned_user_id : null;
             try {
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
@@ -396,6 +411,7 @@ const registerGraph = () => {
                     node_type_id: this.editingNode.node_type_id,
                     status_id: this.editingNode.status_id,
                     slot_id: slotIdForApi,
+                    assigned_user_id: assignedUserIdForApi,
                     estimated_minutes: estimatedMinutes
                 });
                 this.closeEditPanel();
@@ -418,7 +434,8 @@ const registerGraph = () => {
         nodeTypes: [],
         taskStatuses: [],
         projectSlots: [],
-        editingNode: null, // { id, title, description, node_type_id, status_id, slot_id, estimated_amount, estimated_unit }
+        projectMembers: [],
+        editingNode: null, // { id, title, description, node_type_id, status_id, slot_id, assigned_user_id, estimated_amount, estimated_unit }
         editingNodeOriginal: null,
         saving: false,
         settingsOpen: false,
@@ -606,6 +623,7 @@ const registerGraph = () => {
                     node_type_id: (nodeTypeId != null && nodeTypeId !== '') ? String(nodeTypeId) : DEFAULTS.NODE_TYPE,
                     status_id: (statusId != null && statusId !== '') ? String(statusId) : DEFAULTS.STATUS_ID,
                     slot_id: (slotId != null && slotId !== '') ? String(slotId) : '',
+                    assigned_user_id: (node.data('assigned_user_id') != null && node.data('assigned_user_id') !== '') ? String(node.data('assigned_user_id')) : '',
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
@@ -615,6 +633,7 @@ const registerGraph = () => {
                     node_type_id: String(this.editingNode.node_type_id ?? ''),
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
+                    assigned_user_id: String(this.editingNode.assigned_user_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
                     estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
@@ -668,7 +687,7 @@ const registerGraph = () => {
             };
             document.addEventListener('keydown', escapeHandler);
 
-            await Promise.all([this.fetchNodeTypes(), this.fetchTaskStatuses(), this.fetchProjectSlots()]);
+            await Promise.all([this.fetchNodeTypes(), this.fetchTaskStatuses(), this.fetchProjectSlots(), this.fetchProjectMembers()]);
             await this.fetchGraph();
         },
 
@@ -710,7 +729,8 @@ const registerGraph = () => {
                                 filteredOut: !!filteredOut,
                                 isGroup: isGroupNode,
                                 groupEmpty: isGroupNode ? false : undefined,
-                                created_at: n.created_at
+                                created_at: n.created_at,
+                                assigned_user_id: n.assigned_user_id ?? ''
                             }
                         };
                     }),
@@ -795,6 +815,17 @@ const registerGraph = () => {
                 this.projectSlots = data.slots;
             } catch (error) {
                 console.error('Fetch error:', error);
+            }
+        },
+
+        async fetchProjectMembers() {
+            try {
+                const response = await fetch(`/api/projects/${this.projectId}/members`);
+                if (!response.ok) return;
+                const data = await response.json();
+                this.projectMembers = data.members || [];
+            } catch (error) {
+                console.error('Fetch members error:', error);
             }
         },
 
@@ -1007,6 +1038,7 @@ const registerGraph = () => {
                     node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
                     status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
                     slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    assigned_user_id: (node.assigned_user_id != null && node.assigned_user_id !== '') ? String(node.assigned_user_id) : '',
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
@@ -1016,6 +1048,7 @@ const registerGraph = () => {
                     node_type_id: String(this.editingNode.node_type_id ?? ''),
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
+                    assigned_user_id: String(this.editingNode.assigned_user_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
                     estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
@@ -1066,6 +1099,7 @@ const registerGraph = () => {
                     node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
                     status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
                     slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    assigned_user_id: (node.assigned_user_id != null && node.assigned_user_id !== '') ? String(node.assigned_user_id) : '',
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
@@ -1075,6 +1109,7 @@ const registerGraph = () => {
                     node_type_id: String(this.editingNode.node_type_id ?? ''),
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
+                    assigned_user_id: String(this.editingNode.assigned_user_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
                     estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
@@ -1210,6 +1245,7 @@ const registerGraph = () => {
                     node_type_id: (node.node_type_id != null && node.node_type_id !== '') ? String(node.node_type_id) : DEFAULTS.NODE_TYPE,
                     status_id: (node.status_id != null && node.status_id !== '') ? String(node.status_id) : DEFAULTS.STATUS_ID,
                     slot_id: (node.slot_id != null && node.slot_id !== '') ? String(node.slot_id) : '',
+                    assigned_user_id: (node.assigned_user_id != null && node.assigned_user_id !== '') ? String(node.assigned_user_id) : '',
                     estimated_amount: estimatedAmount,
                     estimated_unit: estimatedUnit
                 };
@@ -1219,6 +1255,7 @@ const registerGraph = () => {
                     node_type_id: String(this.editingNode.node_type_id ?? ''),
                     status_id: String(this.editingNode.status_id ?? ''),
                     slot_id: String(this.editingNode.slot_id ?? ''),
+                    assigned_user_id: String(this.editingNode.assigned_user_id ?? ''),
                     estimated_amount: this.editingNode.estimated_amount == null || this.editingNode.estimated_amount === '' ? '' : String(this.editingNode.estimated_amount),
                     estimated_unit: String(this.editingNode.estimated_unit || 'hours')
                 };
@@ -1294,6 +1331,7 @@ const registerGraph = () => {
             }
 
             const slotIdForApi = (this.editingNode.slot_id != null && this.editingNode.slot_id !== '') ? this.editingNode.slot_id : null;
+            const assignedUserIdForApi = (this.editingNode.assigned_user_id != null && this.editingNode.assigned_user_id !== '') ? this.editingNode.assigned_user_id : null;
             try {
                 await this.api(`/api/projects/${this.projectId}/nodes/${this.editingNode.id}`, 'PATCH', {
                     title: this.editingNode.title,
@@ -1301,6 +1339,7 @@ const registerGraph = () => {
                     node_type_id: this.editingNode.node_type_id,
                     status_id: this.editingNode.status_id,
                     slot_id: slotIdForApi,
+                    assigned_user_id: assignedUserIdForApi,
                     estimated_minutes: estimatedMinutes
                 });
 
@@ -1318,6 +1357,7 @@ const registerGraph = () => {
                 cyNode.data('status_name', status ? status.name : 'To do');
                 cyNode.data('slot_id', this.editingNode.slot_id || '');
                 cyNode.data('slot_name', slot ? slot.name : '');
+                cyNode.data('assigned_user_id', this.editingNode.assigned_user_id || '');
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.recomputeMutedForGraph();
@@ -1335,6 +1375,7 @@ const registerGraph = () => {
                     node_type_id: String(n.node_type_id ?? ''),
                     status_id: String(n.status_id ?? ''),
                     slot_id: String(n.slot_id ?? ''),
+                    assigned_user_id: String(n.assigned_user_id ?? ''),
                     estimated_amount: n.estimated_amount == null || n.estimated_amount === '' ? '' : String(n.estimated_amount),
                     estimated_unit: String(n.estimated_unit || 'hours')
                 };
@@ -1357,7 +1398,7 @@ const registerGraph = () => {
             const eq = (a, b) => norm(a) === norm(b);
             return !eq(n.title, o.title) || !eq(n.description, o.description) ||
                 !eq(n.node_type_id, o.node_type_id) || !eq(n.status_id, o.status_id) ||
-                !eq(n.slot_id, o.slot_id) || !eq(n.estimated_amount, o.estimated_amount) ||
+                !eq(n.slot_id, o.slot_id) || !eq(n.assigned_user_id, o.assigned_user_id) || !eq(n.estimated_amount, o.estimated_amount) ||
                 !eq(n.estimated_unit, o.estimated_unit);
         },
 

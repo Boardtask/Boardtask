@@ -13,6 +13,7 @@ use validator::Validate;
 
 use crate::app::{
     db,
+    domain::{OrganizationId, UserId},
     error::AppError,
     session::ApiAuthenticatedSession,
     AppState,
@@ -43,6 +44,9 @@ pub struct UpdateNodeRequest {
     /// Omit = unchanged, null = clear parent (ungroup).
     #[serde(default, deserialize_with = "deserialize_optional_option")]
     pub parent_id: Option<Option<String>>,
+    /// Omit = unchanged, null = clear assignee.
+    #[serde(default, deserialize_with = "deserialize_optional_option")]
+    pub assigned_user_id: Option<Option<String>>,
     /// Omit = unchanged, null = clear estimate.
     #[serde(default, deserialize_with = "deserialize_optional_option")]
     #[validate(custom(function = "crate::app::features::graph::helpers::validate_estimated_minutes"))]
@@ -63,9 +67,10 @@ pub struct NodeResponse {
     pub estimated_minutes: Option<i64>,
     pub slot_id: Option<String>,
     pub parent_id: Option<String>,
+    pub assigned_user_id: Option<String>,
 }
 
-/// Validates update-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id when provided).
+/// Validates update-node request (sync rules + DB-backed node_type_id, status_id, slot_id, parent_id, assigned_user_id when provided).
 async fn validate_update_node_request(
     request: &UpdateNodeRequest,
     pool: &sqlx::SqlitePool,
@@ -73,6 +78,8 @@ async fn validate_update_node_request(
     merged_status_id: &str,
     _merged_slot_id: &Option<String>,
     _merged_parent_id: &Option<String>,
+    _merged_assigned_user_id: &Option<String>,
+    organization_id: &str,
     project_id: &str,
     node_id: &str,
 ) -> Result<(), AppError> {
@@ -109,6 +116,18 @@ async fn validate_update_node_request(
             return Err(AppError::Validation("Invalid parent_id".to_string()));
         }
     }
+    if let Some(Some(uid)) = &request.assigned_user_id {
+        let user_id = UserId::from_string(uid)
+            .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+        let org_id = OrganizationId::from_string(organization_id)
+            .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+        let is_member = db::organizations::is_member(pool, &org_id, &user_id).await?;
+        if !is_member {
+            return Err(AppError::Validation(
+                "User is not a member of this organization".to_string(),
+            ));
+        }
+    }
 
     Ok(())
 }
@@ -121,7 +140,7 @@ pub async fn update_node(
     Json(request): Json<UpdateNodeRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), AppError> {
     // Validate org membership on every write
-    let _project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
+    let project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     let node = db::nodes::find_by_id(&state.db, &params.id)
         .await?
@@ -141,6 +160,10 @@ pub async fn update_node(
         .parent_id
         .clone()
         .unwrap_or_else(|| node.parent_id.clone());
+    let assigned_user_id = request
+        .assigned_user_id
+        .clone()
+        .unwrap_or_else(|| node.assigned_user_id.clone());
     validate_update_node_request(
         &request,
         &state.db,
@@ -148,6 +171,8 @@ pub async fn update_node(
         status_id,
         &slot_id,
         &parent_id,
+        &assigned_user_id,
+        &project.organization_id,
         &params.project_id,
         &node.id,
     )
@@ -167,6 +192,7 @@ pub async fn update_node(
         estimated_minutes,
         slot_id.as_deref(),
         parent_id.as_deref(),
+        assigned_user_id.as_deref(),
     )
     .await?;
 
@@ -187,6 +213,7 @@ pub async fn update_node(
         estimated_minutes: updated_node.estimated_minutes,
         slot_id: updated_node.slot_id,
         parent_id: updated_node.parent_id,
+        assigned_user_id: updated_node.assigned_user_id,
     };
 
     Ok((StatusCode::OK, Json(response)))
