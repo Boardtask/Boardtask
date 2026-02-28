@@ -14,6 +14,9 @@
     <p class="mb-4 text-gray-600">Enter your email address and we'll send you a new verification link.</p>
 
     <form method="post" class="space-y-4">
+        {% if next != "" %}
+        <input type="hidden" name="next" value="{{ next }}">
+        {% endif %}
         <div>
             <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
             <input

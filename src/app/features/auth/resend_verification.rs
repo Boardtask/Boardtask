@@ -32,20 +32,33 @@ pub struct ResendVerificationTemplate {
     pub app_name: &'static str,
     pub error: String,
     pub email: String,
+    /// Safe next URL for hidden form field (empty if not set).
+    pub next: String,
 }
 
 /// Query parameters for resend verification page.
 #[derive(Debug, Deserialize)]
 pub struct ResendQuery {
     pub email: Option<String>,
+    pub next: Option<String>,
 }
 
-/// GET /resend-verification — Show form (optionally prefilled from ?email=...).
+/// Safe redirect path: only allow relative paths starting with / to avoid open redirect.
+fn safe_redirect_next(next: Option<String>) -> String {
+    match next {
+        Some(n) if n.starts_with('/') && !n.starts_with("//") => n,
+        _ => String::new(),
+    }
+}
+
+/// GET /resend-verification — Show form (optionally prefilled from ?email=... and ?next=...).
 pub async fn show(Query(query): Query<ResendQuery>) -> ResendVerificationTemplate {
+    let next = safe_redirect_next(query.next);
     ResendVerificationTemplate {
         app_name: APP_NAME,
         error: String::new(),
         email: query.email.unwrap_or_default(),
+        next,
     }
 }
 
@@ -54,11 +67,14 @@ pub async fn submit(
     State(state): State<AppState>,
     Form(form): Form<ResendVerificationForm>,
 ) -> Result<impl IntoResponse, Html<String>> {
+    let safe_next = safe_redirect_next(form.next.clone());
+
     if let Err(_) = form.validate() {
         let template = ResendVerificationTemplate {
             app_name: APP_NAME,
             error: "Invalid email address".to_string(),
             email: form.email.clone(),
+            next: safe_next.clone(),
         };
         return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
     }
@@ -70,18 +86,13 @@ pub async fn submit(
                 app_name: APP_NAME,
                 error: "Invalid email address".to_string(),
                 email: form.email.clone(),
+                next: safe_next.clone(),
             };
             return Err(Html(template.render().map_err(|_| "Template error".to_string())?));
         }
     };
 
     let email_str = email.as_str().to_string();
-
-    // Safe redirect path: only allow relative paths starting with /
-    let safe_next = match &form.next {
-        Some(n) if n.starts_with('/') && !n.starts_with("//") => n.clone(),
-        _ => String::new(),
-    };
 
     // Rate limit: 1 per 60 seconds per email
     let should_send = {
@@ -113,6 +124,7 @@ pub async fn submit(
                         app_name: APP_NAME,
                         error: "An error occurred. Please try again.".to_string(),
                         email: form.email.clone(),
+                        next: safe_next.clone(),
                     };
                     Html(t.render().unwrap_or_else(|_| "Template error".into()))
                 })?;
@@ -124,6 +136,7 @@ pub async fn submit(
                             app_name: APP_NAME,
                             error: "An error occurred. Please try again.".to_string(),
                             email: form.email.clone(),
+                            next: safe_next.clone(),
                         };
                         Html(t.render().unwrap_or_else(|_| "Template error".into()))
                     })?;
@@ -135,6 +148,7 @@ pub async fn submit(
                             app_name: APP_NAME,
                             error: "An error occurred. Please try again.".to_string(),
                             email: form.email.clone(),
+                            next: safe_next.clone(),
                         };
                         Html(t.render().unwrap_or_else(|_| "Template error".into()))
                     })?;
@@ -144,6 +158,7 @@ pub async fn submit(
                         app_name: APP_NAME,
                         error: "An error occurred. Please try again.".to_string(),
                         email: form.email.clone(),
+                        next: safe_next.clone(),
                     };
                     Html(t.render().unwrap_or_else(|_| "Template error".into()))
                 })?;

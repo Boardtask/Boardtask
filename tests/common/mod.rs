@@ -54,6 +54,14 @@ pub fn forgot_password_form_body(email: &str) -> String {
     format!("email={}", urlencoding::encode(email))
 }
 
+pub fn resend_verification_form_body(email: &str, next: Option<&str>) -> String {
+    let base = format!("email={}", urlencoding::encode(email));
+    match next {
+        Some(n) => format!("{}&next={}", base, urlencoding::encode(n)),
+        None => base,
+    }
+}
+
 pub fn change_password_form_body(
     current_password: &str,
     new_password: &str,

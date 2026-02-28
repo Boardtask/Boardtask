@@ -515,6 +515,117 @@ mod auth {
         }
     }
 
+    mod resend_verification {
+        use crate::common::*;
+        use axum::body::Body;
+        use http::StatusCode;
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+
+        /// When validation fails (invalid email), the error page must preserve the `next`
+        /// parameter in a hidden form field so the invite redirect flow is not broken.
+        #[tokio::test]
+        async fn invalid_email_preserves_next_in_error_response() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let next = "/accept-invite/confirm?token=abc123";
+            let body = resend_verification_form_body("not-an-email", Some(next));
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/resend-verification")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("Invalid email"),
+                "Expected validation error message, got: {}",
+                body_str
+            );
+            assert!(
+                body_str.contains("name=\"next\"") && body_str.contains("value=\"/accept-invite/confirm?token=abc123\""),
+                "Expected hidden next field to preserve invite redirect, got: {}",
+                body_str
+            );
+        }
+
+        /// GET with next param should render the form with hidden next field.
+        #[tokio::test]
+        async fn get_with_next_shows_hidden_next_in_form() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let next = urlencoding::encode("/accept-invite/confirm?token=xyz");
+            let request = http::Request::builder()
+                .method("GET")
+                .uri(&format!("/resend-verification?email=user@example.com&next={}", next))
+                .body(Body::empty())
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains("name=\"next\"") && body_str.contains("/accept-invite/confirm"),
+                "Expected hidden next field in form, got: {}",
+                body_str
+            );
+        }
+
+        /// Successful resend with next redirects to check-email with next preserved.
+        #[tokio::test]
+        async fn successful_resend_with_next_redirects_with_next_preserved() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+
+            // Signup creates unverified user
+            let signup_body = signup_form_body("resend-next@example.com", "Password123", "Password123");
+            let signup_request = http::Request::builder()
+                .method("POST")
+                .uri("/signup")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(signup_body))
+                .unwrap();
+            let _ = app.clone().oneshot(signup_request).await.unwrap();
+
+            let next = "/accept-invite/confirm?token=invite123";
+            let body = resend_verification_form_body("resend-next@example.com", Some(next));
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/resend-verification")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/check-email"),
+                "Expected redirect to check-email, got: {}",
+                location
+            );
+            assert!(
+                location.contains("next=") && location.contains("accept-invite"),
+                "Expected next param preserved in redirect for invite flow, got: {}",
+                location
+            );
+        }
+    }
+
     mod account {
         use crate::common::*;
         use axum::body::Body;
