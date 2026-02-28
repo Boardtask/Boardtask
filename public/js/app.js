@@ -453,6 +453,71 @@ function createConnectionPort() {
     return { previewEdgeStyle, setup };
 }
 
+/**
+ * Creates an encapsulated remove-node module for the graph.
+ * Handles node deletion with client-side edge rewiring (parents→children) to avoid full graph redraw.
+ * Setup receives the graph and assigns removeNode to it.
+ *
+ * @returns {{ setup: (graph: object) => object }}
+ */
+function createRemoveNode() {
+    function addRewiredEdges(graph, parents, children) {
+        for (const parentId of parents) {
+            for (const childId of children) {
+                if (parentId === childId) continue;
+                const exists = graph.cy.edges().some(e => e.source().id() === parentId && e.target().id() === childId);
+                if (!exists) {
+                    graph.cy.add({ group: 'edges', data: { source: parentId, target: childId } });
+                }
+            }
+        }
+    }
+
+    async function removeNode() {
+        const graph = this;
+        const nodes = graph.cy.nodes(':selected');
+        if (nodes.length === 0) return;
+
+        try {
+            for (const node of nodes) {
+                const id = node.id();
+                if (graph.isTemporaryGroupNode(node)) {
+                    node.children().move({ parent: null });
+                    graph.cy.remove(node);
+                    graph.groupListVersion++;
+                    continue;
+                }
+                const parents = [...new Set(node.incomers().edges().map(e => e.source().id()))];
+                const children = [...new Set(node.outgoers().edges().map(e => e.target().id()))];
+                if (node.data('isGroup') === true) {
+                    await graph.api(`/api/projects/${graph.projectId}/nodes/${id}`, 'DELETE');
+                    addRewiredEdges(graph, parents, children);
+                    node.children().move({ parent: null });
+                    graph.cy.remove(node);
+                    graph.groupListVersion++;
+                    continue;
+                }
+                await graph.api(`/api/projects/${graph.projectId}/nodes/${id}`, 'DELETE');
+                addRewiredEdges(graph, parents, children);
+                graph.cy.remove(node);
+            }
+            graph.selectedNodeIds = [];
+            graph.editingNode = null;
+            graph.editingNodeOriginal = null;
+            graph.runLayout();
+        } catch (error) {
+            alert(`Error removing node: ${error.message}`);
+        }
+    }
+
+    function setup(graph) {
+        Object.assign(graph, { removeNode });
+        return { removeNode };
+    }
+
+    return { setup };
+}
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -714,6 +779,7 @@ const registerGraph = () => {
 
         async init() {
             const connectionPortModule = createConnectionPort();
+            const removeNodeModule = createRemoveNode();
 
             this.cy = cytoscape({
                 container: this.$refs.canvas,
@@ -787,6 +853,7 @@ const registerGraph = () => {
             });
 
             connectionPortModule.setup(this);
+            removeNodeModule.setup(this);
 
             if (this.cy.nodeHtmlLabel) {
                 this.cy.nodeHtmlLabel([
@@ -1515,38 +1582,6 @@ const registerGraph = () => {
         toggleDirection() {
             this.layoutDirection = this.layoutDirection === 'TB' ? 'LR' : 'TB';
             this.runLayout();
-        },
-
-        async removeNode() {
-            const nodes = this.cy.nodes(':selected');
-            if (nodes.length === 0) return;
-
-            try {
-                for (const node of nodes) {
-                    const id = node.id();
-                    if (this.isTemporaryGroupNode(node)) {
-                        node.children().move({ parent: null });
-                        this.cy.remove(node);
-                        this.groupListVersion++;
-                        continue;
-                    }
-                    if (node.data('isGroup') === true) {
-                        await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'DELETE');
-                        node.children().move({ parent: null });
-                        this.cy.remove(node);
-                        this.groupListVersion++;
-                        continue;
-                    }
-                    await this.api(`/api/projects/${this.projectId}/nodes/${id}`, 'DELETE');
-                    this.cy.remove(node);
-                }
-                this.selectedNodeIds = [];
-                this.editingNode = null;
-                this.editingNodeOriginal = null;
-                this.runLayout();
-            } catch (error) {
-                alert(`Error removing node: ${error.message}`);
-            }
         },
 
         async saveNode() {
