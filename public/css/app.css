@@ -3294,6 +3294,19 @@ sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px
 .cy-node--filtered .cy-node__type, .cy-node--filtered .cy-node__label { color: #888888 !important; }
 /* Side Drawer for Node Editing */
 .graph-container { min-height: 300px; width: 100%; position: relative; background: transparent; }
+.graph-port {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--primary, #5A8FF0);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  pointer-events: auto;
+  z-index: 100;
+  transition: transform 0.1s ease;
+}
+.graph-port:hover { transform: scale(1.2); }
 .side-drawer {
   position: absolute;
   top: 20px;

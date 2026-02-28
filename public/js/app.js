@@ -258,6 +258,201 @@ function buildStableRootSort(cy) {
     };
 }
 
+/**
+ * Creates an encapsulated connection port module for the graph.
+ * All connector behavior (port element, preview edge, hover/click, connectFromPort) lives here.
+ * Setup receives the graph and uses it for all dependencies.
+ *
+ * @returns {{ previewEdgeStyle: object, setup: (graph: object) => object }}
+ */
+function createConnectionPort() {
+    let graph = null;
+    let hoveredNodeId = null;
+    let portNodeId = null;
+    let connectingFromNodeId = null;
+    let previewEdge = null;
+    let portEl = null;
+    let cy = null;
+    let container = null;
+
+    const previewEdgeStyle = {
+        selector: 'edge.preview',
+        style: {
+            'line-style': 'dashed',
+            'line-color': '#5A8FF0',
+            'target-arrow-color': '#5A8FF0',
+            'opacity': 0.6,
+            'width': 2
+        }
+    };
+
+    function createPortElement() {
+        const port = document.createElement('div');
+        port.className = 'graph-port';
+        port.style.position = 'absolute';
+        port.style.pointerEvents = 'auto';
+        port.style.zIndex = '100';
+        port.style.display = 'none';
+        return port;
+    }
+
+    function updatePortPosition() {
+        if (!cy || !portEl) return;
+
+        let nodeId = null;
+        if (connectingFromNodeId && hoveredNodeId && hoveredNodeId !== connectingFromNodeId) {
+            nodeId = hoveredNodeId;
+        } else if (!connectingFromNodeId && hoveredNodeId) {
+            nodeId = hoveredNodeId;
+        }
+
+        if (!nodeId) {
+            portNodeId = null;
+            portEl.style.display = 'none';
+            portEl.style.pointerEvents = 'none';
+            return;
+        }
+
+        const node = cy.$id(nodeId);
+        if (node.length === 0) {
+            portNodeId = null;
+            portEl.style.display = 'none';
+            portEl.style.pointerEvents = 'none';
+            return;
+        }
+
+        portNodeId = nodeId;
+        const box = node.renderedBoundingBox();
+        const left = box.x2 - 6;
+        const top = (box.y1 + box.y2) / 2 - 6;
+        portEl.style.left = left + 'px';
+        portEl.style.top = top + 'px';
+        portEl.style.display = 'block';
+        portEl.style.pointerEvents = 'auto';
+    }
+
+    function updatePreviewEdge() {
+        if (previewEdge) {
+            previewEdge.remove();
+            previewEdge = null;
+        }
+
+        if (connectingFromNodeId && hoveredNodeId && hoveredNodeId !== connectingFromNodeId &&
+            graph && !graph.isGroupNode(connectingFromNodeId) && !graph.isGroupNode(hoveredNodeId)) {
+            previewEdge = cy.add({
+                group: 'edges',
+                data: { source: connectingFromNodeId, target: hoveredNodeId },
+                classes: 'preview'
+            });
+        }
+    }
+
+    function cancelConnectingMode() {
+        connectingFromNodeId = null;
+        if (previewEdge) {
+            previewEdge.remove();
+            previewEdge = null;
+        }
+        if (container) container.style.cursor = '';
+        updatePortPosition();
+    }
+
+    function isConnecting() {
+        return !!connectingFromNodeId;
+    }
+
+    function handlePortClick(e) {
+        e.stopPropagation();
+        const nodeId = portNodeId || hoveredNodeId;
+        if (!nodeId) return;
+        if (!connectingFromNodeId) {
+            connectingFromNodeId = nodeId;
+            if (container) container.style.cursor = 'crosshair';
+            updatePortPosition();
+            updatePreviewEdge();
+            return;
+        }
+        const targetId = nodeId;
+        if (targetId === connectingFromNodeId) return;
+        if (graph && (graph.isGroupNode(targetId) || graph.isGroupNode(connectingFromNodeId))) {
+            alert('Cannot connect two groups. Connect a task to a group or to another task.');
+            return;
+        }
+        connectFromPort(connectingFromNodeId, targetId);
+        cancelConnectingMode();
+    }
+
+    async function connectFromPort(sourceId, targetId) {
+        if (!graph) return;
+        const sourceIsGroup = graph.isGroupNode(sourceId);
+        const targetIsGroup = graph.isGroupNode(targetId);
+
+        if (sourceIsGroup || targetIsGroup) {
+            alert('Cannot connect two groups. Connect a task to a group or to another task.');
+            return;
+        }
+
+        try {
+            await graph.api(`/api/projects/${graph.projectId}/edges`, 'POST', {
+                parent_id: sourceId,
+                child_id: targetId
+            });
+
+            graph.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
+            graph.runLayout();
+            graph.recomputeMutedForGraph();
+        } catch (error) {
+            alert(`Error connecting nodes: ${error.message}`);
+        }
+    }
+
+    function registerCytoscapeEvents() {
+        cy.on('mouseover', 'node', (evt) => {
+            hoveredNodeId = evt.target.id();
+            updatePortPosition();
+            updatePreviewEdge();
+        });
+
+        cy.on('mouseout', 'node', (evt) => {
+            if (evt.target.id() === hoveredNodeId) hoveredNodeId = null;
+            updatePortPosition();
+            updatePreviewEdge();
+        });
+
+        cy.on('mouseout', (evt) => {
+            if (evt.target === cy) {
+                hoveredNodeId = null;
+                updatePortPosition();
+                updatePreviewEdge();
+            }
+        });
+
+        cy.on('pan zoom', () => updatePortPosition());
+    }
+
+    function setup(g) {
+        graph = g;
+        cy = graph.cy;
+        container = graph.$refs.canvas;
+        portEl = createPortElement();
+        container.appendChild(portEl);
+        portEl.addEventListener('click', handlePortClick);
+        registerCytoscapeEvents();
+
+        const api = {
+            cancelConnectingMode,
+            updatePortPosition,
+            updatePreviewEdge,
+            isConnecting,
+            connectFromPort
+        };
+        if (graph) Object.assign(graph, api);
+        return api;
+    }
+
+    return { previewEdgeStyle, setup };
+}
+
 const registerGraph = () => {
     if (!window.Alpine) return;
 
@@ -518,6 +713,8 @@ const registerGraph = () => {
         },
 
         async init() {
+            const connectionPortModule = createConnectionPort();
+
             this.cy = cytoscape({
                 container: this.$refs.canvas,
                 boxSelectionEnabled: false,
@@ -557,6 +754,7 @@ const registerGraph = () => {
                             'opacity': 0.9
                         }
                     },
+                    connectionPortModule.previewEdgeStyle,
                     {
                         selector: ':parent',
                         style: {
@@ -587,6 +785,8 @@ const registerGraph = () => {
                     }
                 }
             });
+
+            connectionPortModule.setup(this);
 
             if (this.cy.nodeHtmlLabel) {
                 this.cy.nodeHtmlLabel([
@@ -693,6 +893,7 @@ const registerGraph = () => {
             this.cy.on('tap', async (evt) => {
                 if (evt.target === this.cy) {
                     await this.requestCloseEditPanel();
+                    this.cancelConnectingMode();
                     this.cy.nodes().unselect();
                     this.cy.edges().unselect();
                     this.selectedNodeIds = [];
@@ -722,7 +923,10 @@ const registerGraph = () => {
             });
 
             const escapeHandler = (e) => {
-                if (e.key === 'Escape' && this.editingNode) this.requestCloseEditPanel();
+                if (e.key === 'Escape') {
+                    if (this.isConnecting()) this.cancelConnectingMode();
+                    else if (this.editingNode) this.requestCloseEditPanel();
+                }
             };
             document.addEventListener('keydown', escapeHandler);
 
@@ -790,6 +994,7 @@ const registerGraph = () => {
                 this.cy.add(elements);
                 this.selectedEdge = null;
                 this.runLayout({ fit: true });
+                if (this.updatePortPosition) this.updatePortPosition();
             } catch (error) {
                 console.error('Fetch error:', error);
                 alert('Could not load graph data.');
@@ -1180,29 +1385,7 @@ const registerGraph = () => {
 
         async connectNodes() {
             if (this.selectedNodeIds.length !== 2) return;
-
-            const sourceId = this.selectedNodeIds[0];
-            const targetId = this.selectedNodeIds[1];
-            const sourceIsGroup = this.isGroupNode(sourceId);
-            const targetIsGroup = this.isGroupNode(targetId);
-
-            if (sourceIsGroup || targetIsGroup) {
-                alert('Cannot connect two groups. Connect a task to a group or to another task.');
-                return;
-            }
-
-            try {
-                await this.api(`/api/projects/${this.projectId}/edges`, 'POST', {
-                    parent_id: sourceId,
-                    child_id: targetId
-                });
-
-                this.cy.add({ group: 'edges', data: { source: sourceId, target: targetId } });
-                this.runLayout();
-                this.recomputeMutedForGraph();
-            } catch (error) {
-                alert(`Error connecting nodes: ${error.message}`);
-            }
+            await this.connectFromPort(this.selectedNodeIds[0], this.selectedNodeIds[1]);
         },
 
         async disconnectNodes() {
@@ -1611,6 +1794,10 @@ const registerGraph = () => {
                     });
                 });
             }
+
+            layout.on('layoutstop', () => {
+                if (this.updatePortPosition) this.updatePortPosition();
+            });
 
             layout.run();
         }
