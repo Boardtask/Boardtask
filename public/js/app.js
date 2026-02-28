@@ -203,59 +203,34 @@ function buildNodeLabelHtml(data, opts) {
 }
 
 /**
- * Returns a sort function for the Dagre layout so that root nodes stay in a stable order
- * (by created_at) and do not reshuffle when adding a child under one epic. Dagre uses this
- * order as the tie-breaker when defining topology; we assign each node a rootIndex from its
- * root ancestor so the layout keeps roots fixed and only expands the relevant subtree.
+ * Reorder root nodes by created_at after layout so they stay stable when adding/removing nodes.
+ * Call from layoutstop. Reuses Klay's root positions and reassigns so the first root by
+ * created_at gets the first slot (left for TB, top for LR).
  * @param {object} cy - Cytoscape instance
- * @returns {function} Comparator (a, b) for layout sort option
+ * @param {boolean} layoutDirectionTB - true for top-down, false for left-right
  */
-function buildStableRootSort(cy) {
-    const nodes = cy.nodes();
-    if (nodes.length > 0) {
-        const roots = nodes.filter(n => n.incomers().length === 0);
-        const sortedRoots = roots.sort((a, b) => {
-            const ta = a.data('created_at') ?? 0;
-            const tb = b.data('created_at') ?? 0;
-            if (ta !== tb) return ta - tb;
-            return String(a.id()).localeCompare(String(b.id()));
+function applyStableRootOrder(cy, layoutDirectionTB) {
+    const roots = cy.nodes().filter(n => n.incomers().length === 0 && !n.data('isTemporary'));
+    if (roots.length <= 1) return;
+
+    const sortedRoots = roots.sort((a, b) => {
+        const ta = a.data('created_at') ?? 0;
+        const tb = b.data('created_at') ?? 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.id()).localeCompare(String(b.id()));
+    });
+
+    if (layoutDirectionTB) {
+        const xs = sortedRoots.map(r => r.position('x')).sort((a, b) => a - b);
+        sortedRoots.forEach((node, i) => {
+            node.position({ x: xs[i], y: node.position('y') });
         });
-        const rootIdToIndex = {};
-        sortedRoots.forEach((r, i) => { rootIdToIndex[r.id()] = i; });
-
-        function getRootAncestorId(node, visited) {
-            if (visited.has(node.id())) return node.id();
-            visited.add(node.id());
-            const inEdges = node.incomers();
-            if (inEdges.length === 0) return node.id();
-            const parent = inEdges.first().source();
-            return getRootAncestorId(parent, visited);
-        }
-
-        nodes.forEach(node => {
-            const rootId = getRootAncestorId(node, new Set());
-            const idx = rootIdToIndex[rootId];
-            node.data('rootIndex', typeof idx === 'number' ? idx : 0);
+    } else {
+        const ys = sortedRoots.map(r => r.position('y')).sort((a, b) => a - b);
+        sortedRoots.forEach((node, i) => {
+            node.position({ x: node.position('x'), y: ys[i] });
         });
     }
-
-    return (a, b) => {
-        const ri = (el) => (el.isNode() ? (el.data('rootIndex') ?? 0) : 0);
-        const id = (el) => (el.isNode() ? el.id() : el.source().id() + '\0' + el.target().id());
-        if (a.isNode() && b.isNode()) {
-            const d = ri(a) - ri(b);
-            if (d !== 0) return d;
-            return String(a.id()).localeCompare(String(b.id()));
-        }
-        if (a.isEdge() && b.isEdge()) {
-            const ra = ri(a.source()) - ri(b.source());
-            if (ra !== 0) return ra;
-            const rb = ri(a.target()) - ri(b.target());
-            if (rb !== 0) return rb;
-            return String(id(a)).localeCompare(String(id(b)));
-        }
-        return a.isNode() ? -1 : 1;
-    };
 }
 
 /**
@@ -732,7 +707,9 @@ const registerGraph = () => {
         progressFilter: '', // '' | 'todo' | 'in_progress' | 'done'
         editingSlotId: null,
         editingSlotName: '',
+        editingSlotAssignedUserId: '',
         newSlotName: '',
+        newSlotAssignedUserId: '',
         slotError: '',
         groupListVersion: 0,
         toolbarMenu: null, // 'add' | 'filter' | 'group' | null
@@ -1719,7 +1696,9 @@ const registerGraph = () => {
             }
             this.editingSlotId = null;
             this.editingSlotName = '';
+            this.editingSlotAssignedUserId = '';
             this.newSlotName = '';
+            this.newSlotAssignedUserId = '';
             this.slotError = '';
             this.fetchProjectSlots();
         },
@@ -1728,18 +1707,22 @@ const registerGraph = () => {
             this.settingsOpen = false;
             this.editingSlotId = null;
             this.editingSlotName = '';
+            this.editingSlotAssignedUserId = '';
             this.newSlotName = '';
+            this.newSlotAssignedUserId = '';
             this.slotError = '';
         },
 
         startEditSlot(slot) {
             this.editingSlotId = slot.id;
             this.editingSlotName = slot.name;
+            this.editingSlotAssignedUserId = slot.assigned_user_id ?? '';
         },
 
         cancelEditSlot() {
             this.editingSlotId = null;
             this.editingSlotName = '';
+            this.editingSlotAssignedUserId = '';
         },
 
         async saveEditSlot() {
@@ -1751,9 +1734,10 @@ const registerGraph = () => {
             }
             this.slotError = '';
             try {
-                await this.updateSlot(this.editingSlotId, name);
+                await this.updateSlot(this.editingSlotId, name, this.editingSlotAssignedUserId);
                 this.editingSlotId = null;
                 this.editingSlotName = '';
+                this.editingSlotAssignedUserId = '';
             } catch (e) {
                 this.slotError = e.message || 'Failed to update slot';
             }
@@ -1767,18 +1751,25 @@ const registerGraph = () => {
             }
             this.slotError = '';
             try {
-                await this.api(`/api/projects/${this.projectId}/slots`, 'POST', { name });
+                await this.api(`/api/projects/${this.projectId}/slots`, 'POST', {
+                    name,
+                    assigned_user_id: this.newSlotAssignedUserId || null
+                });
                 await this.fetchProjectSlots();
                 this.newSlotName = '';
+                this.newSlotAssignedUserId = '';
             } catch (e) {
                 this.slotError = e.message || 'Failed to add slot';
             }
         },
 
-        async updateSlot(slotId, name) {
+        async updateSlot(slotId, name, assignedUserId) {
             const trimmed = (name || '').trim();
             if (!trimmed) return;
-            await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'PATCH', { name: trimmed });
+            await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'PATCH', {
+                name: trimmed,
+                assigned_user_id: assignedUserId === '' ? '' : (assignedUserId || null)
+            });
             await this.fetchProjectSlots();
         },
 
@@ -1821,6 +1812,7 @@ const registerGraph = () => {
             }
 
             layout.on('layoutstop', () => {
+                applyStableRootOrder(cy, this.layoutDirection === 'TB');
                 if (this.updatePortPosition) this.updatePortPosition();
             });
 

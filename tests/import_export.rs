@@ -78,6 +78,7 @@ mod export_tests {
                 project_id: project_id.clone(),
                 name: "Sprint 1".to_string(),
                 sort_order: 0,
+                assigned_user_id: None,
             },
         )
         .await

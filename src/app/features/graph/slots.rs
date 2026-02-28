@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use ulid::Ulid;
 use validator::Validate;
 
@@ -12,6 +13,7 @@ use crate::app::{
     db,
     error::AppError,
     session::ApiAuthenticatedSession,
+    tenant,
     AppState,
 };
 
@@ -34,6 +36,7 @@ pub struct CreateSlotRequest {
     #[validate(length(min = 1, max = 255))]
     pub name: String,
     pub sort_order: Option<i64>,
+    pub assigned_user_id: Option<String>,
 }
 
 /// Request body for updating a slot.
@@ -42,6 +45,8 @@ pub struct UpdateSlotRequest {
     #[validate(length(min = 1, max = 255))]
     pub name: Option<String>,
     pub sort_order: Option<i64>,
+    /// Absent = leave unchanged, null or "" = clear, non-empty string = set.
+    pub assigned_user_id: Option<JsonValue>,
 }
 
 /// GET /api/projects/:project_id/slots — List slots for a project.
@@ -66,7 +71,13 @@ pub async fn create_slot(
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
-    super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
+    let project = super::helpers::ensure_project_accessible(&state.db, &project_id, &session.user_id).await?;
+
+    if let Some(ref uid) = request.assigned_user_id {
+        tenant::require_org_member(&state.db, uid, &project.organization_id)
+            .await
+            .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+    }
 
     let existing = db::project_slots::find_by_project(&state.db, &project_id).await?;
     if existing.iter().any(|s| s.name == request.name) {
@@ -79,6 +90,7 @@ pub async fn create_slot(
         project_id: project_id.clone(),
         name: request.name,
         sort_order,
+        assigned_user_id: request.assigned_user_id.clone(),
     };
 
     db::project_slots::insert(&state.db, &slot).await?;
@@ -101,7 +113,7 @@ pub async fn update_slot(
         .validate()
         .map_err(|_| AppError::Validation("Invalid input".to_string()))?;
 
-    super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
+    let project = super::helpers::ensure_project_accessible(&state.db, &params.project_id, &session.user_id).await?;
 
     let slot = db::project_slots::find_by_id(&state.db, &params.id)
         .await?
@@ -114,7 +126,25 @@ pub async fn update_slot(
     let name = request.name.as_deref().unwrap_or(&slot.name);
     let sort_order = request.sort_order.unwrap_or(slot.sort_order);
 
-    db::project_slots::update(&state.db, &params.id, name, sort_order).await?;
+    let assigned_user_id = match &request.assigned_user_id {
+        None => slot.assigned_user_id.as_deref(),
+        Some(JsonValue::Null) => None,
+        Some(JsonValue::String(uid)) => {
+            if uid.is_empty() {
+                None
+            } else {
+                tenant::require_org_member(&state.db, uid, &project.organization_id)
+                    .await
+                    .map_err(|_| AppError::Validation("Invalid assigned_user_id".to_string()))?;
+                Some(uid.as_str())
+            }
+        }
+        Some(_) => {
+            return Err(AppError::Validation("assigned_user_id must be null or a string".to_string()));
+        }
+    };
+
+    db::project_slots::update(&state.db, &params.id, name, sort_order, assigned_user_id).await?;
 
     let updated = db::project_slots::find_by_id(&state.db, &params.id)
         .await?

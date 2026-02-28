@@ -141,6 +141,7 @@ pub async fn import_project(
             project_id: new_project_id.clone(),
             name: s.name.clone(),
             sort_order: s.sort_order,
+            assigned_user_id: None,
         };
         db::project_slots::insert(&mut *tx, &new_slot).await?;
     }

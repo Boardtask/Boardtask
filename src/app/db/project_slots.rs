@@ -9,6 +9,7 @@ pub struct ProjectSlot {
     pub name: String,
     pub sort_order: i64,
     pub created_at: i64,
+    pub assigned_user_id: Option<String>,
 }
 
 /// Data structure for inserting a new project slot.
@@ -17,6 +18,7 @@ pub struct NewProjectSlot {
     pub project_id: String,
     pub name: String,
     pub sort_order: i64,
+    pub assigned_user_id: Option<String>,
 }
 
 /// Insert a new project slot into the database.
@@ -30,13 +32,14 @@ where
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
     sqlx::query(
-        "INSERT INTO project_slots (id, project_id, name, sort_order, created_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO project_slots (id, project_id, name, sort_order, created_at, assigned_user_id) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(&slot.id)
     .bind(&slot.project_id)
     .bind(&slot.name)
     .bind(slot.sort_order)
     .bind(now)
+    .bind(&slot.assigned_user_id)
     .execute(executor)
     .await?;
 
@@ -49,7 +52,7 @@ pub async fn find_by_project(
     project_id: &str,
 ) -> Result<Vec<ProjectSlot>, sqlx::Error> {
     sqlx::query_as::<_, ProjectSlot>(
-        "SELECT id, project_id, name, sort_order, created_at FROM project_slots WHERE project_id = ? ORDER BY sort_order, name",
+        "SELECT id, project_id, name, sort_order, created_at, assigned_user_id FROM project_slots WHERE project_id = ? ORDER BY sort_order, name",
     )
     .bind(project_id)
     .fetch_all(pool)
@@ -62,28 +65,44 @@ pub async fn find_by_id(
     id: &str,
 ) -> Result<Option<ProjectSlot>, sqlx::Error> {
     sqlx::query_as::<_, ProjectSlot>(
-        "SELECT id, project_id, name, sort_order, created_at FROM project_slots WHERE id = ?",
+        "SELECT id, project_id, name, sort_order, created_at, assigned_user_id FROM project_slots WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
     .await
 }
 
-/// Update a project slot's name and/or sort_order.
+/// Update a project slot's name, sort_order, and/or assigned_user_id.
 pub async fn update(
     pool: &sqlx::SqlitePool,
     id: &str,
     name: &str,
     sort_order: i64,
+    assigned_user_id: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE project_slots SET name = ?, sort_order = ? WHERE id = ?",
-    )
-    .bind(name)
-    .bind(sort_order)
-    .bind(id)
-    .execute(pool)
-    .await?;
+    match assigned_user_id {
+        Some(uid) => {
+            sqlx::query(
+                "UPDATE project_slots SET name = ?, sort_order = ?, assigned_user_id = ? WHERE id = ?",
+            )
+            .bind(name)
+            .bind(sort_order)
+            .bind(uid)
+            .bind(id)
+            .execute(pool)
+            .await?;
+        }
+        None => {
+            sqlx::query(
+                "UPDATE project_slots SET name = ?, sort_order = ?, assigned_user_id = NULL WHERE id = ?",
+            )
+            .bind(name)
+            .bind(sort_order)
+            .bind(id)
+            .execute(pool)
+            .await?;
+        }
+    }
 
     Ok(())
 }

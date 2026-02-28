@@ -341,8 +341,9 @@
                             <template x-for="slot in projectSlots" :key="slot.id">
                                 <li class="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
                                     <template x-if="editingSlotId !== slot.id">
-                                        <div class="flex-1 min-w-0 flex items-center gap-2">
+                                        <div class="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                                             <span class="truncate" x-text="slot.name"></span>
+                                            <span class="text-gray-500 text-sm shrink-0" x-text="slot.assigned_user_id ? ((() => { const m = projectMembers.find(mem => mem.user_id === slot.assigned_user_id); return m ? (m.first_name && m.last_name ? m.first_name + ' ' + m.last_name : m.email) : '—'; })()) : '—'"></span>
                                             <button type="button" @click="startEditSlot(slot)"
                                                 class="p-1.5 rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700 shrink-0"
                                                 aria-label="Edit slot">
@@ -356,15 +357,27 @@
                                         </div>
                                     </template>
                                     <template x-if="editingSlotId === slot.id">
-                                        <div class="flex-1 min-w-0 flex items-center gap-2">
-                                            <input type="text" x-model="editingSlotName"
-                                                @keydown.enter="saveEditSlot()"
-                                                @keydown.escape="cancelEditSlot()"
-                                                class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded text-sm">
-                                            <button type="button" @click="saveEditSlot()"
-                                                class="px-2 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Save</button>
-                                            <button type="button" @click="cancelEditSlot()"
-                                                class="px-2 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">Cancel</button>
+                                        <div class="flex-1 min-w-0 flex flex-col gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <input type="text" x-model="editingSlotName"
+                                                    @keydown.enter="saveEditSlot()"
+                                                    @keydown.escape="cancelEditSlot()"
+                                                    class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded text-sm">
+                                                <button type="button" @click="saveEditSlot()"
+                                                    class="px-2 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Save</button>
+                                                <button type="button" @click="cancelEditSlot()"
+                                                    class="px-2 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50">Cancel</button>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-600 mb-0.5">Assigned user</label>
+                                                <select x-model="editingSlotAssignedUserId"
+                                                    class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                                    <option value="">No one</option>
+                                                    <template x-for="m in projectMembers" :key="m.user_id">
+                                                        <option :value="m.user_id" x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
                                         </div>
                                     </template>
                                 </li>
@@ -373,18 +386,30 @@
 
                         <div class="pt-2">
                             <p class="text-xs text-gray-500 mb-2">Add a new slot</p>
-                            <div class="flex gap-2 flex-wrap items-end">
-                                <div class="min-w-0 flex-1">
-                                    <label for="new-slot-name" class="sr-only">Slot name</label>
-                                    <input id="new-slot-name" type="text" x-model="newSlotName"
-                                        placeholder="Slot name"
-                                        @keydown.enter="addSlot()"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <div class="flex flex-col gap-2">
+                                <div class="flex gap-2 flex-wrap items-end">
+                                    <div class="min-w-0 flex-1">
+                                        <label for="new-slot-name" class="sr-only">Slot name</label>
+                                        <input id="new-slot-name" type="text" x-model="newSlotName"
+                                            placeholder="Slot name"
+                                            @keydown.enter="addSlot()"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    </div>
+                                    <button type="button" @click="addSlot()"
+                                        class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
+                                        Add slot
+                                    </button>
                                 </div>
-                                <button type="button" @click="addSlot()"
-                                    class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700">
-                                    Add slot
-                                </button>
+                                <div>
+                                    <label for="new-slot-assigned-user" class="block text-xs font-medium text-gray-600 mb-0.5">Assigned user</label>
+                                    <select id="new-slot-assigned-user" x-model="newSlotAssignedUserId"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                        <option value="">No one</option>
+                                        <template x-for="m in projectMembers" :key="m.user_id">
+                                            <option :value="m.user_id" x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                        </template>
+                                    </select>
+                                </div>
                             </div>
                             <p x-show="slotError" x-text="slotError" class="mt-1 text-sm text-red-600"></p>
                         </div>

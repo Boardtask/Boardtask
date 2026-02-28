@@ -364,6 +364,7 @@ async fn post_node_slot_id_from_other_project_returns_error() {
         project_id: other_project_id.clone(),
         name: "FE 1".to_string(),
         sort_order: 0,
+        assigned_user_id: None,
     };
     boardtask::app::db::project_slots::insert(&pool, &slot).await.unwrap();
 
@@ -387,6 +388,149 @@ async fn post_node_slot_id_from_other_project_returns_error() {
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["error"], "Invalid slot_id");
+}
+
+#[tokio::test]
+async fn post_slot_with_assigned_user_id_succeeds() {
+    let (cookie, project_id, pool, app, _) = setup_user_and_project("slotassignee@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "name": "FE 1", "assigned_user_id": user_id }).to_string(),
+        ))
+        .unwrap();
+    let post_slot_res = app.oneshot(post_slot_req).await.unwrap();
+    assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+
+    let slot_body: serde_json::Value =
+        serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(slot_body["assigned_user_id"], user_id);
+    assert_eq!(slot_body["name"], "FE 1");
+}
+
+#[tokio::test]
+async fn post_slot_invalid_assigned_user_id_returns_error() {
+    let (cookie, project_id, _pool, app, _) = setup_user_and_project("slotinvassignee@example.com", "Password123").await;
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "name": "FE 1", "assigned_user_id": "01JXXXXXXXXXXXXXX" }).to_string(),
+        ))
+        .unwrap();
+    let post_slot_res = app.oneshot(post_slot_req).await.unwrap();
+    assert_eq!(post_slot_res.status(), http::StatusCode::BAD_REQUEST);
+
+    let body_bytes = post_slot_res.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "Invalid assigned_user_id");
+}
+
+#[tokio::test]
+async fn patch_slot_set_assigned_user_id_then_clear() {
+    let (cookie, project_id, pool, app, _) = setup_user_and_project("patchslotassignee@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(serde_json::json!({ "name": "BE 1" }).to_string()))
+        .unwrap();
+    let post_slot_res = app.clone().oneshot(post_slot_req).await.unwrap();
+    assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+    let slot_body: serde_json::Value =
+        serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let slot_id = slot_body["id"].as_str().unwrap();
+    assert!(slot_body["assigned_user_id"].is_null());
+
+    let patch_set_req = http::Request::builder()
+        .method("PATCH")
+        .uri(&format!("/api/projects/{}/slots/{}", project_id, slot_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "assigned_user_id": user_id }).to_string(),
+        ))
+        .unwrap();
+    let patch_set_res = app.clone().oneshot(patch_set_req).await.unwrap();
+    assert_eq!(patch_set_res.status(), http::StatusCode::OK);
+    let set_body: serde_json::Value =
+        serde_json::from_slice(&patch_set_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(set_body["assigned_user_id"], user_id);
+
+    let patch_clear_req = http::Request::builder()
+        .method("PATCH")
+        .uri(&format!("/api/projects/{}/slots/{}", project_id, slot_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "name": "BE 1", "assigned_user_id": "" }).to_string(),
+        ))
+        .unwrap();
+    let patch_clear_res = app.clone().oneshot(patch_clear_req).await.unwrap();
+    assert_eq!(patch_clear_res.status(), http::StatusCode::OK);
+    let clear_body: serde_json::Value =
+        serde_json::from_slice(&patch_clear_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert!(clear_body["assigned_user_id"].is_null());
+
+    let get_slots_req = http::Request::builder()
+        .method("GET")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("cookie", &cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let get_slots_res = app.oneshot(get_slots_req).await.unwrap();
+    assert_eq!(get_slots_res.status(), http::StatusCode::OK);
+    let slots_body: serde_json::Value =
+        serde_json::from_slice(&get_slots_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let slots = slots_body["slots"].as_array().unwrap();
+    let cleared_slot = slots.iter().find(|s| s["id"] == slot_id).unwrap();
+    assert!(cleared_slot["assigned_user_id"].is_null());
+}
+
+#[tokio::test]
+async fn patch_slot_without_assigned_user_id_leaves_unchanged() {
+    let (cookie, project_id, pool, app, _) = setup_user_and_project("patchslotomit@example.com", "Password123").await;
+    let user_id = user_id_from_cookie(&pool, &cookie).await;
+
+    let post_slot_req = http::Request::builder()
+        .method("POST")
+        .uri(&format!("/api/projects/{}/slots", project_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(
+            serde_json::json!({ "name": "BE 1", "assigned_user_id": user_id }).to_string(),
+        ))
+        .unwrap();
+    let post_slot_res = app.clone().oneshot(post_slot_req).await.unwrap();
+    assert_eq!(post_slot_res.status(), http::StatusCode::CREATED);
+    let slot_body: serde_json::Value =
+        serde_json::from_slice(&post_slot_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let slot_id = slot_body["id"].as_str().unwrap();
+
+    let patch_req = http::Request::builder()
+        .method("PATCH")
+        .uri(&format!("/api/projects/{}/slots/{}", project_id, slot_id))
+        .header("content-type", "application/json")
+        .header("cookie", &cookie)
+        .body(axum::body::Body::from(serde_json::json!({ "name": "Back-end Developer 1" }).to_string()))
+        .unwrap();
+    let patch_res = app.oneshot(patch_req).await.unwrap();
+    assert_eq!(patch_res.status(), http::StatusCode::OK);
+    let updated: serde_json::Value =
+        serde_json::from_slice(&patch_res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(updated["name"], "Back-end Developer 1");
+    assert_eq!(updated["assigned_user_id"], user_id);
 }
 
 #[tokio::test]
