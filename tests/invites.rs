@@ -316,6 +316,17 @@ async fn accept_invite_as_new_user_creates_user_and_redirects_to_app() {
     let is_member = boardtask::app::db::organizations::is_member(&pool, &org_id, &new_user_id).await.unwrap();
     assert!(is_member);
 
+    // Regression: accept-invite must add user to org's default team. If team add fails, the whole
+    // transaction rolls back (user not in org). This ensures we never have org members without team membership.
+    let default_team = boardtask::app::db::teams::find_default_for_org(&pool, &org_id)
+        .await
+        .unwrap()
+        .expect("org has default team");
+    let in_team = boardtask::app::db::team_members::is_member(&pool, &default_team.id, &new_user_id)
+        .await
+        .unwrap();
+    assert!(in_team, "accepted user must be in org's default team");
+
     let invite_still = boardtask::app::db::organization_invites::find_by_token(&pool, &token).await.unwrap();
     assert!(invite_still.is_none(), "invite should be consumed");
 }
@@ -493,6 +504,17 @@ async fn accept_invite_as_existing_user_switches_org() {
 
     let is_member = boardtask::app::db::organizations::is_member(&pool, &org_id, &invitee_user_id).await.unwrap();
     assert!(is_member);
+
+    // Regression: accept-invite must add user to org's default team. If team add fails, the whole
+    // transaction rolls back (user not in org). This ensures we never have org members without team membership.
+    let default_team = boardtask::app::db::teams::find_default_for_org(&pool, &org_id)
+        .await
+        .unwrap()
+        .expect("org has default team");
+    let in_team = boardtask::app::db::team_members::is_member(&pool, &default_team.id, &invitee_user_id)
+        .await
+        .unwrap();
+    assert!(in_team, "accepted user must be in org's default team");
 
     let new_cookie = confirm_response.headers().get("set-cookie").and_then(|v| v.to_str().ok()).map(|s| s.split(';').next().unwrap_or("").to_string());
     let cookie_to_use = new_cookie.as_deref().unwrap_or(&invitee_cookie);
