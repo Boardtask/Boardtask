@@ -42,7 +42,7 @@ pub async fn delete_node(
     let children =
         db::node_edges::find_children_of(&state.db, &node.id).await?;
 
-    // Transactionally: rewire edges between parents and children, then delete the node.
+    // Transactionally: rewire edges between parents and children, clear parent_id on children, then delete the node.
     let mut tx = state.db.begin().await.map_err(AppError::Database)?;
 
     // For each parent/child pair, create an edge parent -> child, skipping self-loops.
@@ -62,6 +62,11 @@ pub async fn delete_node(
                 .map_err(AppError::Database)?;
         }
     }
+
+    // Clear parent_id on any nodes that had this node as parent (e.g. group children).
+    db::nodes::clear_parent_for_children(&mut *tx, &node.id)
+        .await
+        .map_err(AppError::Database)?;
 
     db::nodes::delete_with_executor(&mut *tx, &node.id)
         .await

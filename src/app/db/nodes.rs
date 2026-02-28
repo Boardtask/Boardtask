@@ -179,3 +179,18 @@ where
 
     Ok(())
 }
+
+/// Clear parent_id for all nodes that have the given parent (e.g. before deleting the parent node).
+pub async fn clear_parent_for_children<'e, E>(
+    executor: E,
+    parent_id: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    sqlx::query("UPDATE nodes SET parent_id = NULL WHERE parent_id = ?")
+        .bind(parent_id)
+        .execute(executor)
+        .await?;
+    Ok(())
+}

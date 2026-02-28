@@ -461,24 +461,13 @@ function createConnectionPort() {
  * @returns {{ setup: (graph: object) => object }}
  */
 function createRemoveNode() {
-    function addRewiredEdges(graph, parents, children) {
-        for (const parentId of parents) {
-            for (const childId of children) {
-                if (parentId === childId) continue;
-                const exists = graph.cy.edges().some(e => e.source().id() === parentId && e.target().id() === childId);
-                if (!exists) {
-                    graph.cy.add({ group: 'edges', data: { source: parentId, target: childId } });
-                }
-            }
-        }
-    }
-
     async function removeNode() {
         const graph = this;
         const nodes = graph.cy.nodes(':selected');
         if (nodes.length === 0) return;
 
         try {
+            let needReload = false;
             for (const node of nodes) {
                 const id = node.id();
                 if (graph.isTemporaryGroupNode(node)) {
@@ -487,24 +476,25 @@ function createRemoveNode() {
                     graph.groupListVersion++;
                     continue;
                 }
-                const parents = [...new Set(node.incomers().edges().map(e => e.source().id()))];
-                const children = [...new Set(node.outgoers().edges().map(e => e.target().id()))];
                 if (node.data('isGroup') === true) {
                     await graph.api(`/api/projects/${graph.projectId}/nodes/${id}`, 'DELETE');
-                    addRewiredEdges(graph, parents, children);
                     node.children().move({ parent: null });
                     graph.cy.remove(node);
                     graph.groupListVersion++;
+                    needReload = true;
                     continue;
                 }
                 await graph.api(`/api/projects/${graph.projectId}/nodes/${id}`, 'DELETE');
-                addRewiredEdges(graph, parents, children);
-                graph.cy.remove(node);
+                needReload = true;
             }
             graph.selectedNodeIds = [];
             graph.editingNode = null;
             graph.editingNodeOriginal = null;
-            graph.runLayout();
+            if (needReload) {
+                await graph.fetchGraph();
+            } else {
+                graph.runLayout();
+            }
         } catch (error) {
             alert(`Error removing node: ${error.message}`);
         }
