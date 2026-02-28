@@ -389,6 +389,16 @@
                             <p x-show="slotError" x-text="slotError" class="mt-1 text-sm text-red-600"></p>
                         </div>
                     </div>
+
+                    <div class="space-y-4 mt-6">
+                        <h4 class="text-sm font-semibold text-gray-700">Backup / export</h4>
+                        <p class="text-xs text-gray-500">Download this project as a JSON file. You can re-import it later to create a copy.</p>
+                        <a href="/api/projects/{{ project.id }}/export" download
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-black/5 hover:bg-black/10 text-charcoal font-medium rounded-lg border border-beige-border transition-colors text-sm">
+                            <span class="material-symbols-outlined text-lg">download</span>
+                            Export project (JSON)
+                        </a>
+                    </div>
                 </div>
 
                 <div class="side-drawer__footer">

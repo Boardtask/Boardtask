@@ -424,6 +424,37 @@ const registerGraph = () => {
         }
     }));
 
+    Alpine.data('projectImport', () => ({
+        importError: '',
+        async importFromFile() {
+            const input = document.getElementById('import-project-file-list');
+            if (!input || !input.files || input.files.length === 0) {
+                this.importError = 'Please select a JSON file';
+                return;
+            }
+            this.importError = '';
+            const file = input.files[0];
+            try {
+                const text = await file.text();
+                const response = await fetch('/api/projects/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: text,
+                    credentials: 'include',
+                    redirect: 'follow'
+                });
+                if (response.ok) {
+                    window.location.href = response.url;
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    this.importError = data.error || response.statusText || 'Import failed';
+                }
+            } catch (e) {
+                this.importError = e.message || 'Import failed';
+            }
+        }
+    }));
+
     Alpine.data('graph', (projectId) => ({
         projectId: projectId,
         cy: null,

@@ -10,6 +10,19 @@
         <a href="/app/projects/new" class="text-primary underline">Create a project</a>
     </p>
 
+    <div class="mb-4" x-data="projectImport()">
+        <p class="text-sm text-gray-600 mb-2">Create a new project from an exported JSON file.</p>
+        <div class="flex flex-col gap-2">
+            <input type="file" id="import-project-file-list" accept=".json,application/json" class="text-sm text-gray-600 file:mr-2 file:py-2 file:px-4 file:rounded file:border file:border-gray-300 file:bg-white file:text-charcoal">
+            <button type="button" @click="importFromFile()"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 text-white font-medium rounded-lg transition-colors text-sm w-fit">
+                <span class="material-symbols-outlined text-lg">upload</span>
+                Import from file
+            </button>
+            <p x-show="importError" x-text="importError" class="text-sm text-red-600"></p>
+        </div>
+    </div>
+
     <table class="table w-full border border-gray-200">
         <thead>
             <tr class="border-b border-gray-200">
