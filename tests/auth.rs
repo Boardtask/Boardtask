@@ -730,5 +730,133 @@ mod auth {
                 Some("/app")
             );
         }
+
+        #[tokio::test]
+        async fn update_profile_image_requires_authentication() {
+            let pool = test_pool().await;
+            let app = test_router(pool);
+
+            let body = update_profile_image_form_body("https://example.com/avatar.png");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/update-profile-image")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                response.headers().get("location").map(|v| v.to_str().unwrap()),
+                Some("/login")
+            );
+        }
+
+        #[tokio::test]
+        async fn update_profile_image_https_required() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "http-url@example.com", "Password123").await;
+
+            let body = update_profile_image_form_body("http://example.com/avatar.png");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/update-profile-image")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/app/account?error="),
+                "Expected redirect with error for non-HTTPS URL, got: {}",
+                location
+            );
+        }
+
+        #[tokio::test]
+        async fn update_profile_image_requires_image_extension() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "no-ext@example.com", "Password123").await;
+
+            let body = update_profile_image_form_body("https://example.com/document.pdf");
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/update-profile-image")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.starts_with("/app/account?error="),
+                "Expected redirect with error for non-image URL, got: {}",
+                location
+            );
+        }
+
+        #[tokio::test]
+        async fn update_profile_image_success_and_displays_on_account_page() {
+            let pool = test_pool().await;
+            let app = test_router(pool.clone());
+            let cookie =
+                authenticated_cookie(&pool, &app, "avatar@example.com", "Password123").await;
+
+            let url = "https://example.com/photo.jpg";
+            let body = update_profile_image_form_body(url);
+            let request = http::Request::builder()
+                .method("POST")
+                .uri("/app/account/update-profile-image")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("cookie", &cookie)
+                .body(Body::from(body))
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+            let location = response
+                .headers()
+                .get("location")
+                .map(|v| v.to_str().unwrap())
+                .unwrap();
+            assert!(
+                location.contains("success=profile_image_updated"),
+                "Expected redirect with success, got: {}",
+                location
+            );
+
+            let get_request = http::Request::builder()
+                .method("GET")
+                .uri("/app/account")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap();
+            let get_response = app.oneshot(get_request).await.unwrap();
+            assert_eq!(get_response.status(), StatusCode::OK);
+            let body_bytes = get_response.into_body().collect().await.unwrap().to_bytes();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            assert!(
+                body_str.contains(url),
+                "Expected profile image URL on account page, got: {}",
+                body_str
+            );
+        }
     }
 }

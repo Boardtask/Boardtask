@@ -67,6 +67,10 @@ pub fn change_password_form_body(
     )
 }
 
+pub fn update_profile_image_form_body(profile_image_url: &str) -> String {
+    format!("profile_image_url={}", urlencoding::encode(profile_image_url))
+}
+
 pub fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {
     set_cookie_header.split(';').next()?.strip_prefix("session_id=")
 }

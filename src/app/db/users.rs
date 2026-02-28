@@ -1,7 +1,7 @@
 use sqlx::FromRow;
 use time::OffsetDateTime;
 
-use crate::app::domain::{Email, HashedPassword, OrganizationId, UserId};
+use crate::app::domain::{Email, HashedPassword, OrganizationId, ProfileImageUrl, UserId};
 
 /// Database row for users table.
 #[derive(Debug, FromRow)]
@@ -15,6 +15,7 @@ pub struct User {
     pub organization_id: String,
     pub first_name: String,
     pub last_name: String,
+    pub profile_image_url: Option<String>,
 }
 
 /// Data structure for inserting a new user.
@@ -33,7 +34,7 @@ pub async fn find_by_email(
     email: &Email,
 ) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name FROM users WHERE email = ?",
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name, profile_image_url FROM users WHERE email = ?",
     )
     .bind(email.as_str())
     .fetch_optional(pool)
@@ -49,7 +50,7 @@ where
     E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
 {
     sqlx::query_as::<_, User>(
-        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name FROM users WHERE id = ?",
+        "SELECT id, email, password_hash, created_at, updated_at, email_verified_at, organization_id, COALESCE(first_name, '') AS first_name, COALESCE(last_name, '') AS last_name, profile_image_url FROM users WHERE id = ?",
     )
         .bind(user_id.as_str())
         .fetch_optional(executor)
@@ -107,6 +108,26 @@ where
     sqlx::query("UPDATE users SET first_name = ?, last_name = ?, updated_at = ? WHERE id = ?")
         .bind(first_name)
         .bind(last_name)
+        .bind(now)
+        .bind(user_id.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
+
+/// Update a user's profile image URL. Pass None to clear.
+pub async fn update_profile_image_url<'e, E>(
+    executor: E,
+    user_id: &UserId,
+    url: Option<&ProfileImageUrl>,
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    let value = url.map(ProfileImageUrl::as_str);
+    sqlx::query("UPDATE users SET profile_image_url = ?, updated_at = ? WHERE id = ?")
+        .bind(value)
         .bind(now)
         .bind(user_id.as_str())
         .execute(executor)

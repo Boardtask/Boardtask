@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use askama::Template;
 use axum::{
     extract::{Query, State},
@@ -6,12 +8,13 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use regex::Regex;
 use serde::Deserialize;
 use validator::Validate;
 
 use crate::app::{
     db,
-    domain::{Password, HashedPassword, UserId},
+    domain::{HashedPassword, Password, ProfileImageUrl, UserId},
     session::AuthenticatedSession,
     AppState, APP_NAME,
 };
@@ -32,6 +35,8 @@ pub struct AccountTemplate {
     pub email_verified: bool,
     pub first_name_value: String,
     pub last_name_value: String,
+    pub profile_image_url_value: String,
+    pub profile_image_url_display: String,
     pub error: String,
     pub success: String,
 }
@@ -57,6 +62,21 @@ pub struct UpdateNameForm {
 
     #[validate(length(min = 1, max = 100))]
     pub last_name: String,
+}
+
+/// Regex: empty/whitespace or HTTPS URL with image extension (.jpg, .jpeg, .png, .gif, .webp).
+static RE_PROFILE_IMAGE_URL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\s*$|^\s*https://[^?#]*\.(jpg|jpeg|png|gif|webp)(\?.*)?(#.*)?$").unwrap()
+});
+
+/// Update profile image URL form. Empty string means "clear".
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateProfileImageForm {
+    #[validate(
+        length(max = 2048),
+        regex(path = *RE_PROFILE_IMAGE_URL, message = "URL must use HTTPS and point to an image."),
+    )]
+    pub profile_image_url: Option<String>,
 }
 
 fn error_redirect(msg: &str) -> Redirect {
@@ -90,6 +110,8 @@ pub async fn show_account(
         email_verified: user.email_verified_at.is_some(),
         first_name_value,
         last_name_value,
+        profile_image_url_value: user.profile_image_url.as_deref().unwrap_or("").to_string(),
+        profile_image_url_display: user.profile_image_url.clone().unwrap_or_default(),
         error: query.error.unwrap_or_default(),
         success: query.success.unwrap_or_default(),
     };
@@ -188,10 +210,43 @@ pub async fn update_name(
     Redirect::to("/app/account?success=name_updated").into_response()
 }
 
+/// POST /app/account/update-profile-image — Set or clear profile image URL.
+pub async fn update_profile_image(
+    AuthenticatedSession(session): AuthenticatedSession,
+    State(state): State<AppState>,
+    Form(form): Form<UpdateProfileImageForm>,
+) -> impl IntoResponse {
+    if let Err(ref errors) = form.validate() {
+        return error_redirect(&errors.to_string()).into_response();
+    }
+
+    let user_id = match UserId::from_string(&session.user_id) {
+        Ok(id) => id,
+        Err(_) => return Redirect::to("/login").into_response(),
+    };
+
+    let url: Option<ProfileImageUrl> = form
+        .profile_image_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| ProfileImageUrl::new(s).expect("validation passed"));
+
+    if db::users::update_profile_image_url(&state.db, &user_id, url.as_ref())
+        .await
+        .is_err()
+    {
+        return error_redirect("Failed to update profile image.").into_response();
+    }
+
+    Redirect::to("/app/account?success=profile_image_updated").into_response()
+}
+
 /// Account routes.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/app/account", get(show_account))
         .route("/app/account/change-password", post(change_password))
         .route("/app/account/update-name", post(update_name))
+        .route("/app/account/update-profile-image", post(update_profile_image))
 }
