@@ -1066,6 +1066,20 @@ const registerGraph = () => {
             } catch (_) {}
         },
 
+        updateNodeAssigneeFromSlots() {
+            if (!this.cy) return;
+            this.cy.nodes().forEach(node => {
+                const slotId = node.data('slot_id') || '';
+                const slot = this.projectSlots.find(s => s.id === slotId);
+                const effectiveUserId = node.data('assigned_user_id') || (slot?.assigned_user_id ?? '');
+                const assignee = this.projectMembers.find(m => m.user_id === effectiveUserId);
+                node.data('assigned_user_profile_image_url', assignee?.profile_image_url ?? '');
+                node.data('assigned_user_name', assignee ? (assignee.first_name + ' ' + assignee.last_name) : '');
+                node.data('assigned_user_initials', assignee ? getInitials(assignee.first_name + ' ' + assignee.last_name) : '');
+            });
+            this.refreshNodeLabels();
+        },
+
         refreshNodeLabels() {
             try {
                 const cy = this.cy;
@@ -1788,6 +1802,7 @@ const registerGraph = () => {
                     assigned_user_id: this.newSlotAssignedUserId || null
                 });
                 await this.fetchProjectSlots();
+                this.updateNodeAssigneeFromSlots();
                 this.newSlotName = '';
                 this.newSlotAssignedUserId = '';
             } catch (e) {
@@ -1805,6 +1820,7 @@ const registerGraph = () => {
                 assigned_user_id: assignedUserId === '' ? '' : (assignedUserId || null)
             });
             await this.fetchProjectSlots();
+            this.updateNodeAssigneeFromSlots();
         },
 
         async deleteSlot(slotId) {
@@ -1813,6 +1829,7 @@ const registerGraph = () => {
                 Alpine.store('projectAction', { active: true, label: 'Deleting...' });
                 await this.api(`/api/projects/${this.projectId}/slots/${slotId}`, 'DELETE');
                 await this.fetchProjectSlots();
+                this.updateNodeAssigneeFromSlots();
             } catch (e) {
                 this.slotError = e.message || 'Failed to delete slot';
             } finally {
