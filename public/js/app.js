@@ -70,7 +70,8 @@ function buildCyNodeElement(node, options) {
     const statusId = node.status_id ?? DEFAULTS.STATUS_ID;
     const status = taskStatuses.find(s => s.id === statusId);
     const slot = projectSlots.find(s => s.id === (node.slot_id || ''));
-    const assignee = projectMembers.find(m => m.user_id === (node.assigned_user_id || ''));
+    const effectiveUserId = node.assigned_user_id || (slot?.assigned_user_id ?? '');
+    const assignee = projectMembers.find(m => m.user_id === effectiveUserId);
 
     let muted;
     if (mutedOverride != null) {
@@ -108,7 +109,8 @@ function buildCyNodeElement(node, options) {
             created_at: node.created_at,
             assigned_user_id: node.assigned_user_id ?? '',
             assigned_user_profile_image_url: assignee?.profile_image_url ?? '',
-            assigned_user_name: assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : ''
+            assigned_user_name: assignee ? (assignee.first_name + ' ' + assignee.last_name) : '',
+            assigned_user_initials: assignee ? getInitials(assignee.first_name + ' ' + assignee.last_name) : ''
         }
     };
 }
@@ -128,6 +130,16 @@ function hexToRgba(hex, alpha) {
         b = parseInt(m[1].slice(4, 6), 16);
     }
     return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Derive initials from display name: "John Doe" -> "JD", "John" -> "J". */
+function getInitials(name) {
+    if (!name || typeof name !== 'string') return '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts[0].includes('@')) return parts[0][0].toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
 }
 
 /** Escape for safe use in HTML content and attribute values (prevents XSS). */
@@ -175,15 +187,17 @@ function buildNodeLabelHtml(data, opts) {
     const slotName = escapeHtml(data.slot_name || '');
     const avatarUrl = data.assigned_user_profile_image_url || '';
     const avatarTitle = escapeHtml(data.assigned_user_name || 'Assigned');
+    const initials = data.assigned_user_initials || '';
     const headerRightHtml = avatarUrl
         ? `<div class="cy-node__slot cy-node__slot--avatar"><img src="${escapeHtml(avatarUrl)}" alt="" class="cy-node__avatar" title="${avatarTitle}" /></div>`
-        : (slotName ? `<div class="cy-node__slot block text-10 font-sans font-bold text-taupe min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right flex-1" title="${slotName}">${slotName}</div>` : '');
+        : (initials ? `<div class="cy-node__slot cy-node__slot--initials" title="${avatarTitle}">${escapeHtml(initials)}</div>`
+        : (slotName ? `<div class="cy-node__slot block text-10 font-sans font-bold text-taupe min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right flex-1" title="${slotName}">${slotName}</div>` : ''));
     const estimateStrRaw = formatEstimatedMinutes(data.estimated_minutes);
     const estimateStr = escapeHtml(estimateStrRaw);
     const estimateHtml = estimateStr ? `<div class="cy-node__estimate block text-10 font-sans font-bold text-taupe">${estimateStr}</div>` : '';
     const typeClass = ' cy-node--' + typeSlug;
     const warningClass = isBlocked ? ' cy-node--warning' : '';
-    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !avatarUrl && !isDone) ? ' cy-node--compact' : '';
+    const compactClass = (!estimateStrRaw && !data.status_name && !data.slot_name && !avatarUrl && !initials && !isDone) ? ' cy-node--compact' : '';
     const mutedClass = (opts.muted) ? ' cy-node--muted' : '';
     const filteredClass = (opts.filteredOut) ? ' cy-node--filtered' : '';
     const doneClass = isDone ? ' cy-node--done' : '';
@@ -996,7 +1010,8 @@ const registerGraph = () => {
                         const type = this.nodeTypes.find(t => t.id === n.node_type_id);
                         const status = this.taskStatuses.find(s => s.id === (n.status_id ?? DEFAULTS.STATUS_ID));
                         const slot = this.projectSlots.find(s => s.id === (n.slot_id || ''));
-                        const assignee = this.projectMembers.find(m => m.user_id === (n.assigned_user_id || ''));
+                        const effectiveUserId = n.assigned_user_id || (slot?.assigned_user_id ?? '');
+                        const assignee = this.projectMembers.find(m => m.user_id === effectiveUserId);
                         const root = isRoot(n.id);
                         const statusId = n.status_id ?? DEFAULTS.STATUS_ID;
                         const selfDone = statusId === DONE_STATUS_ID;
@@ -1027,7 +1042,8 @@ const registerGraph = () => {
                                 created_at: n.created_at,
                                 assigned_user_id: n.assigned_user_id ?? '',
                                 assigned_user_profile_image_url: assignee?.profile_image_url ?? '',
-                                assigned_user_name: assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : ''
+                                assigned_user_name: assignee ? (assignee.first_name + ' ' + assignee.last_name) : '',
+                                assigned_user_initials: assignee ? getInitials(assignee.first_name + ' ' + assignee.last_name) : ''
                             }
                         };
                     }),
@@ -1647,9 +1663,11 @@ const registerGraph = () => {
                 cyNode.data('slot_id', this.editingNode.slot_id || '');
                 cyNode.data('slot_name', slot ? slot.name : '');
                 cyNode.data('assigned_user_id', this.editingNode.assigned_user_id || '');
-                const assignee = this.projectMembers.find(m => m.user_id === (this.editingNode.assigned_user_id || ''));
+                const effectiveUserId = this.editingNode.assigned_user_id || (slot?.assigned_user_id ?? '');
+                const assignee = this.projectMembers.find(m => m.user_id === effectiveUserId);
                 cyNode.data('assigned_user_profile_image_url', assignee?.profile_image_url ?? '');
-                cyNode.data('assigned_user_name', assignee ? ((assignee.first_name && assignee.last_name) ? (assignee.first_name + ' ' + assignee.last_name) : assignee.email) : '');
+                cyNode.data('assigned_user_name', assignee ? (assignee.first_name + ' ' + assignee.last_name) : '');
+                cyNode.data('assigned_user_initials', assignee ? getInitials(assignee.first_name + ' ' + assignee.last_name) : '');
                 cyNode.data('estimated_minutes', estimatedMinutes);
 
                 this.recomputeMutedForGraph();

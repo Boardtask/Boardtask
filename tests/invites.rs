@@ -18,7 +18,7 @@ fn invite_form_body(email: &str, role: &str) -> String {
 
 fn signup_form_body_with_next(email: &str, password: &str, confirm_password: &str, next: &str) -> String {
     format!(
-        "email={}&password={}&confirm_password={}&next={}",
+        "first_name=Test&last_name=User&email={}&password={}&confirm_password={}&next={}",
         urlencoding::encode(email),
         urlencoding::encode(password),
         urlencoding::encode(confirm_password),

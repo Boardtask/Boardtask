@@ -112,7 +112,7 @@
                             <option value="">Unassigned</option>
                             <template x-for="m in projectMembers" :key="m.user_id">
                                 <option :value="m.user_id" :selected="editingNode.assigned_user_id === m.user_id"
-                                    x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                    x-text="m.first_name + ' ' + m.last_name"></option>
                             </template>
                         </select>
                     </div>

@@ -71,8 +71,8 @@ impl Seed for DevAdminUser {
             email: email.clone(),
             password_hash,
             organization_id: org_id.clone(),
-            first_name: String::new(),
-            last_name: String::new(),
+            first_name: "Admin".to_string(),
+            last_name: "User".to_string(),
         };
         db::users::insert(pool, &new_user).await?;
 

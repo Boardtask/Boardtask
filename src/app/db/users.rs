@@ -135,21 +135,14 @@ where
     Ok(())
 }
 
-/// Return display name: "First Last" if either name is set, otherwise email.
+/// Return display name: "First Last" (first_name and last_name are always non-empty).
 pub fn display_name(user: &User) -> String {
-    display_name_from_parts(&user.first_name, &user.last_name, &user.email)
+    display_name_from_parts(&user.first_name, &user.last_name)
 }
 
-/// Display name from first/last and email fallback.
-pub fn display_name_from_parts(first_name: &str, last_name: &str, email: &str) -> String {
-    let first = first_name.trim();
-    let last = last_name.trim();
-    let full = format!("{} {}", first, last).trim().to_string();
-    if full.is_empty() {
-        email.to_string()
-    } else {
-        full
-    }
+/// Display name from first and last name (both are required and non-empty).
+pub fn display_name_from_parts(first_name: &str, last_name: &str) -> String {
+    format!("{} {}", first_name.trim(), last_name.trim()).trim().to_string()
 }
 
 /// Update a user's organization (e.g. when accepting an invite to a different org).

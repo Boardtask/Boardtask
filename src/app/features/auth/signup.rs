@@ -35,6 +35,12 @@ fn safe_redirect_next(next: Option<String>) -> String {
 /// Signup form data from HTTP request.
 #[derive(Debug, Deserialize, Validate)]
 pub struct SignupForm {
+    #[validate(length(min = 1, max = 100))]
+    pub first_name: String,
+
+    #[validate(length(min = 1, max = 100))]
+    pub last_name: String,
+
     #[validate(length(min = 1, max = 254), email)]
     pub email: String,
 
@@ -54,6 +60,8 @@ pub struct SignupForm {
 pub struct SignupTemplate {
     pub app_name: &'static str,
     pub error: String,
+    pub first_name: String,
+    pub last_name: String,
     pub email: String,
     /// Safe next URL for hidden form field (empty if not set).
     pub next: String,
@@ -62,6 +70,8 @@ pub struct SignupTemplate {
 /// Create a new user account and verification token. Returns (user_id, token) on success.
 async fn create_account(
     pool: &sqlx::SqlitePool,
+    first_name: &str,
+    last_name: &str,
     email: &Email,
     password: &Password,
 ) -> Result<(UserId, String), AppError> {
@@ -84,8 +94,8 @@ async fn create_account(
         email: email.clone(),
         password_hash,
         organization_id: org_id.clone(),
-        first_name: String::new(),
-        last_name: String::new(),
+        first_name: first_name.trim().to_string(),
+        last_name: last_name.trim().to_string(),
     };
 
     let mut tx = pool.begin().await.map_err(AppError::Database)?;
@@ -143,6 +153,8 @@ pub async fn show(Query(query): Query<SignupQuery>) -> SignupTemplate {
     SignupTemplate {
         app_name: APP_NAME,
         error: String::new(),
+        first_name: String::new(),
+        last_name: String::new(),
         email,
         next,
     }
@@ -160,6 +172,8 @@ pub async fn submit(
         let template = SignupTemplate {
             app_name: APP_NAME,
             error: "Invalid form data".to_string(),
+            first_name: form.first_name.clone(),
+            last_name: form.last_name.clone(),
             email: form.email.clone(),
             next: next.clone(),
         };
@@ -173,6 +187,8 @@ pub async fn submit(
             let template = SignupTemplate {
                 app_name: APP_NAME,
                 error: "Invalid email address".to_string(),
+                first_name: form.first_name.clone(),
+                last_name: form.last_name.clone(),
                 email: form.email.clone(),
                 next: next.clone(),
             };
@@ -186,6 +202,8 @@ pub async fn submit(
             let template = SignupTemplate {
                 app_name: APP_NAME,
                 error: e.message.unwrap_or_else(|| "Invalid password".into()).to_string(),
+                first_name: form.first_name.clone(),
+                last_name: form.last_name.clone(),
                 email: form.email.clone(),
                 next: next.clone(),
             };
@@ -194,7 +212,7 @@ pub async fn submit(
     };
 
     // Create account
-    match create_account(&state.db, &email, &password).await {
+    match create_account(&state.db, &form.first_name, &form.last_name, &email, &password).await {
         Ok((_user_id, token)) => {
             let verify_path = if next.is_empty() {
                 format!("/verify-email?token={}", token)
@@ -228,6 +246,8 @@ pub async fn submit(
                     let template = SignupTemplate {
                         app_name: APP_NAME,
                         error: "Failed to send verification email.".to_string(),
+                        first_name: form.first_name.clone(),
+                        last_name: form.last_name.clone(),
                         email: form.email.clone(),
                         next: next.clone(),
                     };
@@ -239,6 +259,8 @@ pub async fn submit(
             let template = SignupTemplate {
                 app_name: APP_NAME,
                 error: msg,
+                first_name: form.first_name.clone(),
+                last_name: form.last_name.clone(),
                 email: form.email.clone(),
                 next: next.clone(),
             };
@@ -248,6 +270,8 @@ pub async fn submit(
             let template = SignupTemplate {
                 app_name: APP_NAME,
                 error: "Internal server error".to_string(),
+                first_name: form.first_name.clone(),
+                last_name: form.last_name.clone(),
                 email: form.email.clone(),
                 next: next.clone(),
             };

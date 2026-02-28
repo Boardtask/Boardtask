@@ -98,7 +98,7 @@ pub async fn show(
     let members: Vec<MemberRow> = members
         .into_iter()
         .map(|m| {
-            let display_name = db::display_name_from_parts(&m.first_name, &m.last_name, &m.email);
+            let display_name = db::display_name_from_parts(&m.first_name, &m.last_name);
             MemberRow {
                 display_name,
                 email: m.email,

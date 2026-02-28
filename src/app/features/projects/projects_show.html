@@ -295,7 +295,7 @@
                                     <option value="">Unassigned</option>
                                     <template x-for="m in projectMembers" :key="m.user_id">
                                         <option :value="m.user_id" :selected="editingNode.assigned_user_id === m.user_id"
-                                            x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                            x-text="m.first_name + ' ' + m.last_name"></option>
                                     </template>
                                 </select>
                             </div>
@@ -362,7 +362,7 @@
                                     <template x-if="editingSlotId !== slot.id">
                                         <div class="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                                             <span class="truncate" x-text="slot.name"></span>
-                                            <span class="text-gray-500 text-sm shrink-0" x-text="slot.assigned_user_id ? ((() => { const m = projectMembers.find(mem => mem.user_id === slot.assigned_user_id); return m ? (m.first_name && m.last_name ? m.first_name + ' ' + m.last_name : m.email) : '—'; })()) : '—'"></span>
+                                            <span class="text-gray-500 text-sm shrink-0" x-text="slot.assigned_user_id ? ((() => { const m = projectMembers.find(mem => mem.user_id === slot.assigned_user_id); return m ? (m.first_name + ' ' + m.last_name) : '—'; })()) : '—'"></span>
                                             <button type="button" @click="startEditSlot(slot)"
                                                 class="p-1.5 rounded text-gray-500 hover:bg-gray-200 hover:text-gray-700 shrink-0"
                                                 aria-label="Edit slot">
@@ -393,7 +393,7 @@
                                                     class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
                                                     <option value="">No one</option>
                                                     <template x-for="m in projectMembers" :key="m.user_id">
-                                                        <option :value="m.user_id" x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                                        <option :value="m.user_id" x-text="m.first_name + ' ' + m.last_name"></option>
                                                     </template>
                                                 </select>
                                             </div>
@@ -425,7 +425,7 @@
                                         class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
                                         <option value="">No one</option>
                                         <template x-for="m in projectMembers" :key="m.user_id">
-                                            <option :value="m.user_id" x-text="(m.first_name && m.last_name) ? (m.first_name + ' ' + m.last_name) : m.email"></option>
+                                            <option :value="m.user_id" x-text="m.first_name + ' ' + m.last_name"></option>
                                         </template>
                                     </select>
                                 </div>

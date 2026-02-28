@@ -27,7 +27,7 @@ pub async fn ensure_graph_seeds(pool: &SqlitePool) {
 
 pub fn signup_form_body(email: &str, password: &str, confirm_password: &str) -> String {
     format!(
-        "email={}&password={}&confirm_password={}",
+        "first_name=Test&last_name=User&email={}&password={}&confirm_password={}",
         urlencoding::encode(email),
         urlencoding::encode(password),
         urlencoding::encode(confirm_password)
@@ -165,8 +165,8 @@ pub async fn create_verified_user(
         email: email_type.clone(),
         password_hash,
         organization_id: org_id.clone(),
-        first_name: String::new(),
-        last_name: String::new(),
+        first_name: "Test".to_string(),
+        last_name: "User".to_string(),
     };
     boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
 
@@ -225,8 +225,8 @@ pub async fn authenticated_cookie(
         email: email_type.clone(),
         password_hash,
         organization_id: org_id.clone(),
-        first_name: String::new(),
-        last_name: String::new(),
+        first_name: "Test".to_string(),
+        last_name: "User".to_string(),
     };
     boardtask::app::db::users::insert(pool, &new_user).await.unwrap();
 
