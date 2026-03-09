@@ -201,6 +201,26 @@
             </div>
             <div id="cy" x-ref="canvas" class="w-full h-full"></div>
 
+            <!-- Context Menu -->
+            <div x-show="contextMenuNode" 
+                 x-cloak 
+                 x-transition
+                 @click.outside="closeNodeContextMenu()"
+                 class="fixed z-50 bg-white border border-beige-border shadow-xl rounded-lg py-1 min-w-[160px]"
+                 :style="`left: ${contextMenuPos.x}px; top: ${contextMenuPos.y}px;`"
+                 @contextmenu.prevent>
+                <button @click="highlightCriticalPathTo(contextMenuNode); closeNodeContextMenu()"
+                        class="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-beige-light flex items-center gap-2 transition-colors">
+                    <span class="material-symbols-outlined text-lg text-primary">route</span>
+                    Critical path
+                </button>
+                <button @click="clearCriticalPathHighlight(); closeNodeContextMenu()"
+                        class="w-full text-left px-4 py-2 text-sm text-taupe hover:bg-beige-light flex items-center gap-2 transition-colors">
+                    <span class="material-symbols-outlined text-lg">layers_clear</span>
+                    Clear path
+                </button>
+            </div>
+
             <!-- Legend (bottom-left) -->
             <div class="absolute bottom-6 left-6 z-10 glass-panel px-4 py-2 rounded-full flex items-center gap-6 border border-beige-border shadow-md">
                 <div class="flex items-center gap-2">

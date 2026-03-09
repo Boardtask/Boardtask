@@ -706,6 +706,8 @@ const registerGraph = () => {
         slotError: '',
         groupListVersion: 0,
         toolbarMenu: null, // 'add' | 'filter' | 'group' | null
+        contextMenuNode: null,
+        contextMenuPos: { x: 0, y: 0 },
 
         setToolbarMenu(menu) {
             this.toolbarMenu = menu;
@@ -735,6 +737,45 @@ const registerGraph = () => {
                 case 'done': return sid === DONE_STATUS_ID;
                 default: return true;
             }
+        },
+
+        highlightCriticalPathTo(nodeId) {
+            if (!this.cy) return;
+            this.clearCriticalPathHighlight();
+            const node = typeof nodeId === 'string' ? this.cy.$id(nodeId) : nodeId;
+            if (!node || node.length === 0) return;
+
+            // BFS from node via node.incomers()
+            const bfs = this.cy.elements().bfs({
+                roots: node,
+                directed: true,
+                visit: () => {}, // we collect manually or use the result
+            });
+
+            // Cytoscape BFS is forward by default. For critical path (incomers), 
+            // we want to traverse backwards.
+            // We can use node.predecessors() which is more direct for "all nodes/edges leading to"
+            const predecessors = node.predecessors();
+            predecessors.addClass('critical-path');
+            node.addClass('critical-path');
+        },
+
+        clearCriticalPathHighlight() {
+            if (!this.cy) return;
+            this.cy.elements('.critical-path').removeClass('critical-path');
+        },
+
+        openNodeContextMenu(node, pos) {
+            const containerRect = this.cy.container().getBoundingClientRect();
+            this.contextMenuNode = node.id();
+            this.contextMenuPos = { 
+                x: containerRect.left + pos.x, 
+                y: containerRect.top + pos.y 
+            };
+        },
+
+        closeNodeContextMenu() {
+            this.contextMenuNode = null;
         },
 
         async init() {
@@ -778,6 +819,23 @@ const registerGraph = () => {
                             'line-color': '#5A8FF0',
                             'target-arrow-color': '#5A8FF0',
                             'opacity': 0.9
+                        }
+                    },
+                    {
+                        selector: 'edge.critical-path',
+                        style: {
+                            'width': 2.5,
+                            'line-color': '#5A8FF0',
+                            'target-arrow-color': '#5A8FF0',
+                            'opacity': 0.95
+                        }
+                    },
+                    {
+                        selector: 'node.critical-path',
+                        style: {
+                            'border-width': 2,
+                            'border-color': '#5A8FF0',
+                            'border-opacity': 0.9
                         }
                     },
                     connectionPortModule.previewEdgeStyle,
@@ -921,6 +979,8 @@ const registerGraph = () => {
                 if (evt.target === this.cy) {
                     await this.requestCloseEditPanel();
                     this.cancelConnectingMode();
+                    this.closeNodeContextMenu();
+                    this.clearCriticalPathHighlight();
                     this.cy.nodes().unselect();
                     this.cy.edges().unselect();
                     this.selectedNodeIds = [];
@@ -928,6 +988,13 @@ const registerGraph = () => {
                     this.refreshNodeLabels();
                 }
             });
+
+            this.cy.on('cxttap', 'node', (evt) => {
+                if (this.isGroupNode(evt.target)) return;
+                this.openNodeContextMenu(evt.target, evt.renderedPosition);
+            });
+
+            this.cy.container().addEventListener('contextmenu', (e) => e.preventDefault());
 
             this.cy.on('tap', 'edge', async (evt) => {
                 await this.requestCloseEditPanel();
