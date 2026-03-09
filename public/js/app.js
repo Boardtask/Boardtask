@@ -1151,6 +1151,13 @@ const registerGraph = () => {
             try {
                 const cy = this.cy;
                 if (cy && cy.nodeHtmlLabel) {
+                    // Force re-render of all labels by triggering a change on each node.
+                    // This ensures the tpl function is re-evaluated with the current highlightBlockedTodos state.
+                    cy.nodes().forEach(node => {
+                        const muted = node.data('muted');
+                        node.data('muted', !muted);
+                        node.data('muted', muted);
+                    });
                     const nh = cy.nodeHtmlLabel();
                     if (nh && typeof nh.update === 'function') nh.update();
                 }

@@ -1,4 +1,6 @@
 mod dev_admin_user;
+mod dev_project;
+mod dev_teams;
 mod integrations;
 mod system_node_types;
 
@@ -33,6 +35,8 @@ pub fn all_seeds() -> Vec<Box<dyn Seed>> {
     let mut seeds: Vec<Box<dyn Seed>> = vec![
         Box::new(system_node_types::SystemNodeTypes),
         Box::new(dev_admin_user::DevAdminUser),
+        Box::new(dev_teams::DevTeamsSeed),
+        Box::new(dev_project::DevProjectSeed),
         Box::new(integrations::IntegrationsSeed),
     ];
     seeds.sort_by_key(|s| s.version());
