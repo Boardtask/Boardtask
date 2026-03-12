@@ -27,6 +27,11 @@
         <thead>
             <tr class="border-b border-gray-200">
                 <th class="text-left p-3 font-semibold">Name</th>
+                <th class="text-left p-3 font-semibold">Team</th>
+                <th class="text-left p-3 font-semibold">Created by</th>
+                <th class="text-left p-3 font-semibold">Tasks</th>
+                <th class="text-left p-3 font-semibold">Progress</th>
+                <th class="text-left p-3 font-semibold">Actions</th>
                 <th class="text-left p-3 font-semibold">Created</th>
             </tr>
         </thead>
@@ -36,11 +41,33 @@
                 <td class="p-3">
                     <a href="/app/projects/{{ project.id }}" class="text-primary underline">{{ project.title }}</a>
                 </td>
+                <td class="p-3 text-text-secondary">{{ project.team_name }}</td>
+                <td class="p-3 text-text-secondary">{{ project.creator_name }}</td>
+                <td class="p-3 text-text-secondary">{{ project.completed_count }}/{{ project.node_count }}</td>
+                <td class="p-3 text-text-secondary">
+                    <div class="flex items-center gap-2">
+                        <div class="w-16 h-2 bg-gray-200 rounded">
+                            <div class="h-full bg-green-500 rounded" style="width: {{ project.progress_percent }}%"></div>
+                        </div>
+                        <span class="text-sm">{{ project.progress_percent }}%</span>
+                    </div>
+                </td>
+                <td class="p-3 text-text-secondary">
+                    <div class="flex items-center gap-2">
+                        <a href="/app/projects/{{ project.id }}" class="text-primary underline text-sm">Open</a>
+                        <a href="/api/projects/{{ project.id }}/export" download class="text-primary underline text-sm">Export</a>
+                        <form method="POST" action="/api/projects/{{ project.id }}/delete" class="inline"
+                              onsubmit="return confirm('Are you sure you want to delete this project? This action cannot be undone.')">
+                            <input type="hidden" name="_method" value="DELETE">
+                            <button type="submit" class="text-red-600 underline text-sm hover:text-red-800">Delete</button>
+                        </form>
+                    </div>
+                </td>
                 <td class="p-3 text-text-secondary">{{ project.created_at_display }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="2" class="p-3 text-text-secondary">No projects yet. Create your first project!</td>
+                <td colspan="6" class="p-3 text-text-secondary">No projects yet. Create your first project!</td>
             </tr>
             {% endfor %}
         </tbody>

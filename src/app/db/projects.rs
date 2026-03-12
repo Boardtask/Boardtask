@@ -46,6 +46,24 @@ where
     Ok(())
 }
 
+/// Delete a project by ID and organization ID (tenant-scoped).
+pub async fn delete_by_id_and_org<'e, E>(
+    executor: E,
+    project_id: &str,
+    organization_id: &str,
+) -> Result<bool, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    let result = sqlx::query("DELETE FROM projects WHERE id = ? AND organization_id = ?")
+        .bind(project_id)
+        .bind(organization_id)
+        .execute(executor)
+        .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 /// Find all projects for a user scoped by organisation.
 pub async fn find_by_user_and_org(
     pool: &sqlx::SqlitePool,

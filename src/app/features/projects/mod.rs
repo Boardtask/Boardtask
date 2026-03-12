@@ -1,4 +1,5 @@
 mod create;
+mod delete;
 mod export;
 mod format;
 mod helpers;
@@ -22,9 +23,10 @@ pub fn routes() -> Router<AppState> {
         .merge(list_view::routes())
 }
 
-/// API routes for projects (export, import) under /api/projects/...
+/// API routes for projects (export, import, delete) under /api/projects/...
 pub fn api_routes() -> Router<AppState> {
     Router::new()
         .merge(export::routes())
         .merge(import::routes())
+        .merge(delete::routes())
 }
