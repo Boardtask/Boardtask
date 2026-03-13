@@ -4,13 +4,20 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto mt-8 px-4">
-    <h1 class="text-2xl font-bold mb-6">Projects</h1>
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold mb-2">Projects</h1>
+        <p class="text-text-secondary">Create, import, or open projects</p>
+    </div>
 
-    <p class="mb-4">
-        <a href="/app/projects/new" class="text-primary underline">Create a project</a>
-    </p>
+    <div class="mb-6">
+        <a href="/app/projects/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 text-white font-medium rounded-lg transition-colors">
+            <span class="material-symbols-outlined">add</span>
+            Create a project
+        </a>
+    </div>
 
-    <div class="mb-4" x-data="projectImport()">
+    <div class="mb-6" x-data="projectImport()">
+        <h2 class="text-lg font-semibold mb-3">Import Project</h2>
         <p class="text-sm text-gray-600 mb-2">Create a new project from an exported JSON file.</p>
         <div class="flex flex-col gap-2">
             <input type="file" id="import-project-file-list" accept=".json,application/json" class="text-sm text-gray-600 file:mr-2 file:py-2 file:px-4 file:rounded file:border file:border-gray-300 file:bg-white file:text-charcoal">
@@ -67,7 +74,10 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="7" class="p-3 text-text-secondary">No projects yet. Create your first project!</td>
+                <td colspan="7" class="p-8 text-center text-text-secondary">
+                    <p class="mb-2">No projects yet.</p>
+                    <p class="text-sm">Create your first project or import from JSON.</p>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
