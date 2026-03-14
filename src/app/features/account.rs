@@ -85,6 +85,12 @@ pub struct UpdateProfileForm {
     pub bio: Option<String>,
 }
 
+/// Allowed theme modes (must match frontend radio values).
+const ALLOWED_THEME_MODES: [&str; 2] = ["light", "dark"];
+
+/// Allowed language codes (must match frontend select options).
+const ALLOWED_LANGUAGES: [&str; 5] = ["en-US", "en-GB", "es", "fr", "de"];
+
 /// Preferences form.
 #[derive(Debug, Deserialize)]
 pub struct UpdatePreferencesForm {
@@ -263,7 +269,11 @@ pub async fn update_preferences(
     let email_notifications = matches!(form.email_notifications.as_deref(), Some("1"));
     let theme_mode = form.theme_mode.trim();
     let language = form.language.trim();
-    if theme_mode.is_empty() || language.is_empty() {
+    if theme_mode.is_empty()
+        || !ALLOWED_THEME_MODES.contains(&theme_mode)
+        || language.is_empty()
+        || !ALLOWED_LANGUAGES.contains(&language)
+    {
         return error_redirect("Invalid preferences.").into_response();
     }
 
