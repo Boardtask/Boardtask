@@ -18,7 +18,27 @@ export default defineConfig({
     headless: true,
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'authenticated',
+      testMatch: /first_node_zoom\.spec\.ts|project_settings\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: path.join(__dirname, '.auth', 'user.json'),
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'unauthenticated',
+      testMatch: /smoke\.spec\.ts|auth\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
   webServer: {
     command:
       'cd .. && make migrate-e2e && PORT=3001 APP_URL=http://localhost:3001 DATABASE_URL=sqlite:boardtask-e2e.db cargo run',

@@ -1,44 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { execSync } from 'child_process';
-import * as path from 'path';
-
-
-function getVerificationToken(): string {
-  const dbPath = path.join(process.cwd(), '..', 'boardtask-e2e.db');
-  const token = execSync(
-    `sqlite3 "${dbPath}" "SELECT token FROM email_verification_tokens ORDER BY created_at DESC LIMIT 1"`
-  )
-    .toString()
-    .trim();
-  if (!token) {
-    throw new Error('No verification token found in database');
-  }
-  return token;
-}
 
 test.describe('project default view mode', () => {
   test('change default view from graph settings, then project link lands on list view', async ({
     page,
   }) => {
-    const email = `e2e-default-view-${Date.now()}@example.com`;
-    const password = 'Password123';
-
-    // Sign up and verify
-    await page.goto('/signup');
-    await page.getByLabel(/first name/i).fill('E2E');
-    await page.getByLabel(/last name/i).fill('ViewMode');
-    await page.getByLabel(/email/i).first().fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByLabel(/confirm password/i).fill(password);
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page).toHaveURL(/\/check-email/, { timeout: 15000 });
-
-    const token = getVerificationToken();
-    await page.goto(`/verify-email?token=${token}`);
-    await expect(page).toHaveURL(/\/app($|\/)/);
-
-    // Create a project
+    // Already authenticated via storageState
     await page.goto('/app/projects/new');
+
     await page.getByLabel(/project title/i).fill('Default View Test');
     await page.getByRole('button', { name: /create project/i }).click();
     await expect(page).toHaveURL(/\/app\/projects/, { timeout: 5000 });
@@ -80,22 +48,9 @@ test.describe('project default view mode', () => {
       }
     });
 
-    const email = `e2e-console-${Date.now()}@example.com`;
-    const password = 'Password123';
-    await page.goto('/signup');
-    await page.getByLabel(/first name/i).fill('E2E');
-    await page.getByLabel(/last name/i).fill('Console');
-    await page.getByLabel(/email/i).first().fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByLabel(/confirm password/i).fill(password);
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page).toHaveURL(/\/check-email/, { timeout: 15000 });
-
-    const token = getVerificationToken();
-    await page.goto(`/verify-email?token=${token}`);
-    await expect(page).toHaveURL(/\/app($|\/)/);
-
+    // Already authenticated via storageState
     await page.goto('/app/projects/new');
+
     await page.getByLabel(/project title/i).fill('Console Test');
     await page.getByRole('button', { name: /create project/i }).click();
     await expect(page).toHaveURL(/\/app\/projects/, { timeout: 5000 });
@@ -113,25 +68,9 @@ test.describe('project default view mode', () => {
   test('change default view from list settings, then project link lands on graph view', async ({
     page,
   }) => {
-    const email = `e2e-default-view-2-${Date.now()}@example.com`;
-    const password = 'Password123';
-
-    // Sign up and verify
-    await page.goto('/signup');
-    await page.getByLabel(/first name/i).fill('E2E');
-    await page.getByLabel(/last name/i).fill('ViewMode2');
-    await page.getByLabel(/email/i).first().fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByLabel(/confirm password/i).fill(password);
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page).toHaveURL(/\/check-email/, { timeout: 15000 });
-
-    const token = getVerificationToken();
-    await page.goto(`/verify-email?token=${token}`);
-    await expect(page).toHaveURL(/\/app($|\/)/);
-
-    // Create a project
+    // Already authenticated via storageState
     await page.goto('/app/projects/new');
+
     await page.getByLabel(/project title/i).fill('List to Graph Test');
     await page.getByRole('button', { name: /create project/i }).click();
     await expect(page).toHaveURL(/\/app\/projects/, { timeout: 5000 });
@@ -161,23 +100,9 @@ test.describe('project default view mode', () => {
   test('new project loads in graph view by default, list link navigates to list view', async ({
     page,
   }) => {
-    const email = `e2e-default-${Date.now()}@example.com`;
-    const password = 'Password123';
-
-    await page.goto('/signup');
-    await page.getByLabel(/first name/i).fill('E2E');
-    await page.getByLabel(/last name/i).fill('Default');
-    await page.getByLabel(/email/i).first().fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByLabel(/confirm password/i).fill(password);
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page).toHaveURL(/\/check-email/, { timeout: 15000 });
-
-    const token = getVerificationToken();
-    await page.goto(`/verify-email?token=${token}`);
-    await expect(page).toHaveURL(/\/app($|\/)/);
-
+    // Already authenticated via storageState
     await page.goto('/app/projects/new');
+
     await page.getByLabel(/project title/i).fill('Graph Default Test');
     await page.getByRole('button', { name: /create project/i }).click();
     await expect(page).toHaveURL(/\/app\/projects/, { timeout: 5000 });
