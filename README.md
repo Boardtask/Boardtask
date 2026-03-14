@@ -130,8 +130,7 @@ boardtask/
     │           └── login.html
     └── site/                 # Marketing website
         ├── mod.rs
-        ├── home.rs           # Home feature slice (handlers + routes)
-        └── home.html         # Colocated template
+        └── home.rs           # Root route (redirects to /app or /login)
 ```
 
 ## Architecture & Conventions

@@ -1,19 +1,15 @@
-use askama::Template;
-use axum::{routing::get, Router};
+use axum::{response::Redirect, routing::get, Router};
 
-use crate::app::{AppState, APP_NAME};
+use crate::app::{session::OptionalAuthenticatedSession, AppState};
 
-/// The home page template.
-#[derive(Template)]
-#[template(path = "site/home.html")]
-pub struct HomeTemplate {
-    pub app_name: &'static str,
-}
-
-/// GET /
-pub async fn index() -> HomeTemplate {
-    HomeTemplate {
-        app_name: APP_NAME,
+/// GET / — Redirect to /app if authenticated, else /login.
+pub async fn index(
+    OptionalAuthenticatedSession(session): OptionalAuthenticatedSession,
+) -> Redirect {
+    if session.is_some() {
+        Redirect::to("/app")
+    } else {
+        Redirect::to("/login")
     }
 }
 

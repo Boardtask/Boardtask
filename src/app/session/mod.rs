@@ -7,6 +7,7 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde_json::json;
+use std::convert::Infallible;
 
 use crate::app::{db, AppState};
 
@@ -40,6 +41,37 @@ where
             .ok_or(Redirect::to("/login"))?;
 
         Ok(AuthenticatedSession(session))
+    }
+}
+
+/// Extractor that optionally validates the session cookie.
+/// Never rejects: returns `None` when the session is missing or invalid.
+#[derive(Debug, Clone)]
+pub struct OptionalAuthenticatedSession(pub Option<db::sessions::Session>);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for OptionalAuthenticatedSession
+where
+    S: Send + Sync,
+    AppState: FromRef<S>,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let jar = match CookieJar::from_request_parts(parts, state).await {
+            Ok(j) => j,
+            Err(_) => return Ok(OptionalAuthenticatedSession(None)),
+        };
+        let session_id = match jar.get("session_id") {
+            Some(c) => c.value().to_string(),
+            None => return Ok(OptionalAuthenticatedSession(None)),
+        };
+        let app_state = AppState::from_ref(state);
+        let session = match db::sessions::find_valid(&app_state.db, &session_id).await {
+            Ok(Some(s)) => s,
+            _ => return Ok(OptionalAuthenticatedSession(None)),
+        };
+        Ok(OptionalAuthenticatedSession(Some(session)))
     }
 }
 
