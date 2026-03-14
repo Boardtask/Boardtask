@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+{% raw %}
+<script id="tailwind-config">
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    "primary": "#9b58b6",
+                    "background-light": "#ffffff",
+                    "card-bg": "#ffffff",
+                    "border-subtle": "#e5e7eb",
+                    "charcoal": "#334155",
+                },
+                fontFamily: {
+                    "display": ["Inter", "sans-serif"]
+                },
+                borderRadius: {
+                    "DEFAULT": "0.5rem",
+                    "lg": "1rem",
+                    "xl": "1.5rem",
+                    "full": "9999px"
+                },
+            },
+        },
+    }
+</script>
+{% endraw %}
+<style type="text/tailwindcss">
+    .grid-bg {
+        background-image: radial-gradient(circle at 2px 2px, rgba(0, 0, 0, 0.05) 1px, transparent 0);
+        background-size: 24px 24px;
+    }
+    .glass-replacement {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="relative min-h-screen w-full flex flex-col overflow-x-hidden bg-background-light font-display text-charcoal min-h-screen grid-bg">
+    <div class="flex-1 flex items-center justify-center px-6 py-12">
+        <div class="w-full max-w-md">
+            {% block auth_content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% endblock %}
