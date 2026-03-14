@@ -54,6 +54,7 @@ test.describe('auth', () => {
     await expect(page).toHaveURL(/\/app/);
 
     // Logout (redirects to / then / redirects unauthenticated to /login)
+    await page.goto('/app/account');
     await page.getByRole('button', { name: /log out/i }).click();
     await expect(page).toHaveURL(/\/login/);
 
@@ -66,6 +67,7 @@ test.describe('auth', () => {
     await expect(page).toHaveURL(/\/app/);
 
     // Logout again (redirects to / then / redirects unauthenticated to /login)
+    await page.goto('/app/account');
     await page.getByRole('button', { name: /log out/i }).click();
     await expect(page).toHaveURL(/\/login/);
   });

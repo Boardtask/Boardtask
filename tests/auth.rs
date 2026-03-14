@@ -414,14 +414,14 @@ mod auth {
         }
 
         #[tokio::test]
-        async fn dashboard_renders_with_logout_form() {
+        async fn account_renders_with_logout_form() {
             let pool = test_pool().await;
             let app = test_router(pool.clone());
             let cookie = authenticated_cookie(&pool, &app, "dashboard@example.com", "Password123").await;
 
             let request = http::Request::builder()
                 .method("GET")
-                .uri("/app")
+                .uri("/app/account")
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap();
@@ -432,7 +432,7 @@ mod auth {
             let body_str = String::from_utf8_lossy(&body_bytes);
             assert!(
                 body_str.contains("Log Out") || body_str.contains("action=\"/logout\""),
-                "Expected logout form or button in dashboard, got: {}",
+                "Expected logout form or button in account page, got: {}",
                 body_str
             );
         }
