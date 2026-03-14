@@ -2002,12 +2002,15 @@ const registerGraph = () => {
 
         runLayout(opts = {}) {
             const cy = this.cy;
+            const nodeCount = cy.nodes().length;
+            const shouldFit = opts.fit && nodeCount > 1;
+
             const layout = cy.layout({
                 name: 'klay',
                 nodeDimensionsIncludeLabels: true,
                 animate: true,
                 animationDuration: 500,
-                fit: !!opts.fit,
+                fit: shouldFit,
                 padding: 30,
                 klay: {
                     direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
@@ -2021,10 +2024,19 @@ const registerGraph = () => {
 
             if (opts.fit) {
                 layout.one('layoutstop', () => {
-                    cy.animate({
-                        fit: { padding: 50 },
-                        duration: 300
-                    });
+                    if (nodeCount === 0) return;
+                    if (nodeCount === 1) {
+                        cy.animate({
+                            center: { eles: cy.nodes() },
+                            zoom: 1,
+                            duration: 300
+                        });
+                    } else {
+                        cy.animate({
+                            fit: { padding: 50 },
+                            duration: 300
+                        });
+                    }
                 });
             }
 
