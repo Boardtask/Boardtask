@@ -86,11 +86,13 @@ async fn main() {
     let router = boardtask::create_router(state);
 
     // Start the server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let bind_addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
-        .expect("Failed to bind to port 3000");
+        .unwrap_or_else(|e| panic!("Failed to bind to {}: {}", bind_addr, e));
 
-    tracing::info!("Listening on http://localhost:3000");
+    tracing::info!("Listening on http://localhost:{}", port);
 
     // Graceful shutdown: on SIGINT/SIGTERM stop accepting new requests, then close DB cleanly
     axum::serve(listener, router)

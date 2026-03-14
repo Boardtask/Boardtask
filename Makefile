@@ -1,6 +1,6 @@
 APP_NAME = boardtask
 
-.PHONY: setup hosts dev caddy run build test migrate clean db-backup db-reset-wal db-reset squash-migrations
+.PHONY: setup hosts dev caddy run build test migrate clean db-backup db-reset-wal db-reset squash-migrations migrate-e2e e2e e2e-single e2e-grep e2e-install
 
 # Install required dev tools
 setup:
@@ -108,3 +108,28 @@ db-reset: db-backup
 clean:
 	cargo clean
 	rm -f $(APP_NAME).db $(APP_NAME).db-shm $(APP_NAME).db-wal
+
+# --- E2E (Playwright) ---
+
+# E2E: migrate the e2e database (used by Playwright webServer)
+migrate-e2e:
+	sqlx database create --database-url sqlite:$(APP_NAME)-e2e.db 2>/dev/null || true
+	sqlx migrate run --database-url sqlite:$(APP_NAME)-e2e.db
+
+# E2E: run all Playwright tests (headless)
+# PLAYWRIGHT_BROWSERS_PATH ensures e2e/.playwright-browsers is used (works from Cursor, CLI, CI).
+e2e:
+	cd e2e && PLAYWRIGHT_BROWSERS_PATH=$$(pwd)/.playwright-browsers npx playwright test
+
+# E2E: run a single test file (e.g. make e2e-single FILE=smoke.spec.ts)
+e2e-single:
+	cd e2e && PLAYWRIGHT_BROWSERS_PATH=$$(pwd)/.playwright-browsers npx playwright test $(FILE)
+
+# E2E: run a single test by name (e.g. make e2e-grep TEST="user can sign up")
+e2e-grep:
+	cd e2e && PLAYWRIGHT_BROWSERS_PATH=$$(pwd)/.playwright-browsers npx playwright test -g "$(TEST)"
+
+# E2E: install deps + browsers (run once after clone)
+# Uses e2e/.playwright-browsers so browsers work from any run context.
+e2e-install:
+	cd e2e && npm ci && PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers npx playwright install chromium
