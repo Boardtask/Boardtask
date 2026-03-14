@@ -52,10 +52,10 @@ test.describe('auth', () => {
 
     // Verify redirects to /app (dashboard)
     await expect(page).toHaveURL(/\/app/);
-    
-    // Logout
+
+    // Logout (redirects to / then / redirects unauthenticated to /login)
     await page.getByRole('button', { name: /log out/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/login/);
 
     // Login
     await page.goto('/login');
@@ -65,8 +65,8 @@ test.describe('auth', () => {
 
     await expect(page).toHaveURL(/\/app/);
 
-    // Logout again
+    // Logout again (redirects to / then / redirects unauthenticated to /login)
     await page.getByRole('button', { name: /log out/i }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/login/);
   });
 });

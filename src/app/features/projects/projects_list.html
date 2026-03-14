@@ -66,7 +66,7 @@
                         {% for project in projects %}
                         <tr class="table-row-hover transition-colors group">
                             <td class="px-6 py-4">
-                                <a href="/app/projects/{{ project.id }}" class="flex flex-col block">
+                                <a href="{{ project.project_url() }}" class="flex flex-col block">
                                     <span class="text-charcoal font-bold group-hover:text-primary transition-colors">{{ project.title }}</span>
                                     {% if project.description != "" %}
                                     <span class="text-xs text-slate-400 line-clamp-1">{{ project.description }}</span>
@@ -111,7 +111,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 text-right">
-                                <a href="/app/projects/{{ project.id }}" class="text-primary hover:text-primary/80 transition-colors p-1 inline-block">
+                                <a href="{{ project.project_url() }}" class="text-primary hover:text-primary/80 transition-colors p-1 inline-block">
                                     <span class="material-symbols-outlined">chevron_right</span>
                                 </a>
                             </td>

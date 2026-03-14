@@ -36,6 +36,18 @@ pub struct ProjectRow {
     pub blocker_count: i64,
     pub team_avatar_urls: Vec<String>,
     pub team_overflow: i64,
+    pub default_view_mode: String,
+}
+
+impl ProjectRow {
+    /// URL to open this project (graph or list based on default_view_mode).
+    pub fn project_url(&self) -> String {
+        if self.default_view_mode == "list" {
+            format!("/app/projects/{}/list", self.id)
+        } else {
+            format!("/app/projects/{}", self.id)
+        }
+    }
 }
 
 /// Projects list template.
@@ -135,7 +147,7 @@ pub async fn list(
         };
 
         projects.push(ProjectRow {
-            id: p.id,
+            id: p.id.clone(),
             title: p.title,
             description: String::new(), // Projects don't have description
             progress_percent,
@@ -144,6 +156,7 @@ pub async fn list(
             blocker_count,
             team_avatar_urls,
             team_overflow,
+            default_view_mode: p.default_view_mode.clone(),
         });
     }
 

@@ -9,6 +9,7 @@ mod list;
 mod list_view;
 mod progress;
 mod show;
+mod update_settings;
 
 use axum::Router;
 
@@ -23,10 +24,11 @@ pub fn routes() -> Router<AppState> {
         .merge(list_view::routes())
 }
 
-/// API routes for projects (export, import, delete) under /api/projects/...
+/// API routes for projects (export, import, delete, update settings) under /api/projects/...
 pub fn api_routes() -> Router<AppState> {
     Router::new()
         .merge(export::routes())
         .merge(import::routes())
         .merge(delete::routes())
+        .merge(update_settings::routes())
 }

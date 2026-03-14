@@ -3,13 +3,54 @@
 {% block title %}{{ project.title }} (List) · {{ app_name }}{% endblock %}
 
 {% block app_content %}
-    <div x-data="projectList('{{ project.id }}')"
+    <div x-data="projectList('{{ project.id }}', '{{ project.default_view_mode() }}')"
         class="project-list-view bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
         <div class="flex justify-between items-center mb-4 px-6 pt-4">
             <h1 class="text-2xl font-bold">{{ project.title }}</h1>
             <div class="flex items-center gap-3">
+                <button type="button" @click="settingsOpen = true"
+                    class="p-2 text-gray-600 hover:text-gray-900 rounded-lg"
+                    aria-label="Project settings">
+                    <span class="material-symbols-outlined">settings</span>
+                </button>
                 <a href="/app/projects/{{ project.id }}" class="text-blue-600 hover:text-blue-500">Graph view</a>
                 <a href="/app/projects" class="text-blue-600 hover:text-blue-500">Back to projects</a>
+            </div>
+        </div>
+
+        <!-- Settings Drawer -->
+        <div class="side-drawer" :class="{ 'side-drawer--open': settingsOpen }">
+            <div class="side-drawer__header">
+                <h3>Project settings</h3>
+                <button @click="settingsOpen = false" class="side-drawer__close" aria-label="Close settings">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="side-drawer__content">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-gray-700">Display</h4>
+                    <p class="text-sm font-medium text-gray-700 mb-2">Default view when opening project</p>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="list_default_view_mode" value="graph" x-model="defaultViewMode" @change="updateDefaultViewMode()"
+                                class="text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-sm text-gray-700">Graph</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="list_default_view_mode" value="list" x-model="defaultViewMode" @change="updateDefaultViewMode()"
+                                class="text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-sm text-gray-700">List</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="side-drawer__footer">
+                <button @click="settingsOpen = false"
+                    class="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md hover:bg-gray-50 transition duration-200">
+                    Done
+                </button>
             </div>
         </div>
 

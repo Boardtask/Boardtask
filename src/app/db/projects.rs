@@ -1,5 +1,9 @@
+use std::str::FromStr;
+
 use sqlx::FromRow;
 use time::OffsetDateTime;
+
+use crate::app::domain::ProjectViewMode;
 
 /// Database row for projects table.
 #[derive(Debug, FromRow)]
@@ -10,6 +14,14 @@ pub struct Project {
     pub created_at: i64,
     pub organization_id: String,
     pub team_id: Option<String>,
+    pub default_view_mode: String,
+}
+
+impl Project {
+    /// Returns the default view mode as a domain type. Falls back to Graph for invalid values.
+    pub fn default_view_mode(&self) -> ProjectViewMode {
+        ProjectViewMode::from_str(&self.default_view_mode).unwrap_or(ProjectViewMode::Graph)
+    }
 }
 
 /// Data structure for inserting a new project.
@@ -71,7 +83,7 @@ pub async fn find_by_user_and_org(
     organization_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id, team_id, default_view_mode FROM projects WHERE user_id = ? AND organization_id = ? ORDER BY created_at DESC",
     )
     .bind(user_id)
     .bind(organization_id)
@@ -85,7 +97,7 @@ pub async fn list_for_org(
     organization_id: &str,
 ) -> Result<Vec<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE organization_id = ? ORDER BY created_at DESC",
+        "SELECT id, title, user_id, created_at, organization_id, team_id, default_view_mode FROM projects WHERE organization_id = ? ORDER BY created_at DESC",
     )
     .bind(organization_id)
     .fetch_all(pool)
@@ -99,7 +111,7 @@ pub async fn find_by_id_and_org(
     organization_id: &str,
 ) -> Result<Option<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE id = ? AND organization_id = ?",
+        "SELECT id, title, user_id, created_at, organization_id, team_id, default_view_mode FROM projects WHERE id = ? AND organization_id = ?",
     )
     .bind(id)
     .bind(organization_id)
@@ -113,9 +125,34 @@ pub async fn find_by_id(
     id: &str,
 ) -> Result<Option<Project>, sqlx::Error> {
     sqlx::query_as::<_, Project>(
-        "SELECT id, title, user_id, created_at, organization_id, team_id FROM projects WHERE id = ?",
+        "SELECT id, title, user_id, created_at, organization_id, team_id, default_view_mode FROM projects WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
     .await
 }
+
+/// Update default_view_mode for a project. Validates org ownership. Returns the updated project.
+pub async fn update_default_view_mode(
+    pool: &sqlx::SqlitePool,
+    project_id: &str,
+    organization_id: &str,
+    value: ProjectViewMode,
+) -> Result<Option<Project>, sqlx::Error> {
+    let value_str = value.to_string();
+    let result = sqlx::query(
+        "UPDATE projects SET default_view_mode = ? WHERE id = ? AND organization_id = ?",
+    )
+    .bind(&value_str)
+    .bind(project_id)
+    .bind(organization_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Ok(None);
+    }
+
+    find_by_id_and_org(pool, project_id, organization_id).await
+}
+

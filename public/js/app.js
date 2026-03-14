@@ -478,12 +478,18 @@ const registerGraph = () => {
 
     Alpine.store('projectFlash', { show: false, message: '' });
     Alpine.store('projectAction', { active: false, label: '' });
+    Alpine.store('projectDefaultViewMode', { value: 'graph' });
 
     if (Alpine.data('graph')) return;
     if (Alpine.data('projectList')) return;
 
-    Alpine.data('projectList', (projectId) => ({
+    Alpine.data('projectList', (projectId, defaultViewModeInitial = 'graph') => {
+        const mode = (typeof defaultViewModeInitial === 'string' ? defaultViewModeInitial : 'graph').toLowerCase();
+        const validMode = mode === 'list' ? 'list' : 'graph';
+        return {
         projectId,
+        defaultViewMode: validMode,
+        settingsOpen: false,
         tasksData: [],
         nodeTypes: [],
         taskStatuses: [],
@@ -544,6 +550,44 @@ const registerGraph = () => {
                 const data = await response.json();
                 this.projectMembers = data.members || [];
             } catch (_) {}
+        },
+
+        async updateDefaultViewMode() {
+            const mode = this.defaultViewMode === 'list' ? 'list' : 'graph';
+            try {
+                const res = await fetch(`/api/projects/${this.projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ default_view_mode: mode }),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to update');
+                }
+                this.defaultViewMode = mode;
+            } catch (e) {
+                alert(e.message || 'Failed to update default view');
+            }
+        },
+
+        async switchToView(mode, url) {
+            try {
+                const res = await fetch(`/api/projects/${this.projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ default_view_mode: mode }),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to update');
+                }
+                this.defaultViewMode = mode;
+                window.location.href = url;
+            } catch (e) {
+                alert(e.message || 'Failed to update default view');
+            }
         },
 
         openEdit(nodeId) {
@@ -648,7 +692,8 @@ const registerGraph = () => {
                 this.saving = false;
             }
         }
-    }));
+    };
+    });
 
     Alpine.data('projectImport', () => ({
         importError: '',
@@ -681,8 +726,13 @@ const registerGraph = () => {
         }
     }));
 
-    Alpine.data('graph', (projectId) => ({
+    Alpine.data('graph', (projectId, defaultViewModeInitial = 'graph') => {
+        const raw = (typeof defaultViewModeInitial === 'string' ? defaultViewModeInitial : 'graph').toLowerCase();
+        const validMode = (raw === 'list' ? 'list' : 'graph');
+        Alpine.store('projectDefaultViewMode').value = validMode;
+        return {
         projectId: projectId,
+        defaultViewMode: validMode,
         cy: null,
         selectedNodeIds: [],
         selectedEdge: null, // { sourceId, targetId } when one edge is selected
@@ -1829,6 +1879,45 @@ const registerGraph = () => {
             this.slotError = '';
         },
 
+        async updateDefaultViewMode() {
+            const mode = Alpine.store('projectDefaultViewMode').value === 'list' ? 'list' : 'graph';
+            try {
+                const res = await fetch(`/api/projects/${this.projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ default_view_mode: mode }),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to update');
+                }
+                this.defaultViewMode = mode;
+                Alpine.store('projectDefaultViewMode').value = mode;
+            } catch (e) {
+                Alpine.store('projectFlash', { show: true, message: e.message || 'Failed to update default view' });
+            }
+        },
+
+        async switchToView(mode, url) {
+            try {
+                const res = await fetch(`/api/projects/${this.projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ default_view_mode: mode }),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.error || 'Failed to update');
+                }
+                this.defaultViewMode = mode;
+                window.location.href = url;
+            } catch (e) {
+                Alpine.store('projectFlash', { show: true, message: e.message || 'Failed to update default view' });
+            }
+        },
+
         startEditSlot(slot) {
             this.editingSlotId = slot.id;
             this.editingSlotName = slot.name;
@@ -1945,7 +2034,8 @@ const registerGraph = () => {
 
             layout.run();
         }
-    }));
+    };
+    });
 };
 
 if (window.Alpine) {
