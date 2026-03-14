@@ -708,7 +708,7 @@ mod auth {
                 body_str
             );
             assert!(
-                body_str.contains("Change password"),
+                body_str.contains("Update Password"),
                 "Expected change password form in account page, got: {}",
                 body_str
             );
@@ -879,10 +879,10 @@ mod auth {
             let pool = test_pool().await;
             let app = test_router(pool);
 
-            let body = update_profile_image_form_body("https://example.com/avatar.png");
+            let body = update_profile_form_body("https://example.com/avatar.png");
             let request = http::Request::builder()
                 .method("POST")
-                .uri("/app/account/update-profile-image")
+                .uri("/app/account/update-profile")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(Body::from(body))
                 .unwrap();
@@ -902,10 +902,10 @@ mod auth {
             let cookie =
                 authenticated_cookie(&pool, &app, "http-url@example.com", "Password123").await;
 
-            let body = update_profile_image_form_body("http://example.com/avatar.png");
+            let body = update_profile_form_body("http://example.com/avatar.png");
             let request = http::Request::builder()
                 .method("POST")
-                .uri("/app/account/update-profile-image")
+                .uri("/app/account/update-profile")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("cookie", &cookie)
                 .body(Body::from(body))
@@ -932,10 +932,10 @@ mod auth {
             let cookie =
                 authenticated_cookie(&pool, &app, "no-ext@example.com", "Password123").await;
 
-            let body = update_profile_image_form_body("https://example.com/document.pdf");
+            let body = update_profile_form_body("https://example.com/document.pdf");
             let request = http::Request::builder()
                 .method("POST")
-                .uri("/app/account/update-profile-image")
+                .uri("/app/account/update-profile")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("cookie", &cookie)
                 .body(Body::from(body))
@@ -963,10 +963,10 @@ mod auth {
                 authenticated_cookie(&pool, &app, "avatar@example.com", "Password123").await;
 
             let url = "https://example.com/photo.jpg";
-            let body = update_profile_image_form_body(url);
+            let body = update_profile_form_body(url);
             let request = http::Request::builder()
                 .method("POST")
-                .uri("/app/account/update-profile-image")
+                .uri("/app/account/update-profile")
                 .header("content-type", "application/x-www-form-urlencoded")
                 .header("cookie", &cookie)
                 .body(Body::from(body))
@@ -980,7 +980,7 @@ mod auth {
                 .map(|v| v.to_str().unwrap())
                 .unwrap();
             assert!(
-                location.contains("success=profile_image_updated"),
+                location.contains("success=name_updated"),
                 "Expected redirect with success, got: {}",
                 location
             );

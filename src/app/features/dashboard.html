@@ -1,38 +1,73 @@
-{% extends "base.html" %}
+{% extends "app/app_layout.html" %}
 
 {% block title %}Dashboard · {{ app_name }}{% endblock %}
 
-{% block content %}
-<div class="max-w-md mx-auto mt-8">
-    <h1 class="text-2xl font-bold mb-6">Welcome, {{ display_name }}!</h1>
+{% block app_content %}
+<div class="mx-auto max-w-3xl">
+    <h1 class="text-center text-2xl font-bold text-charcoal mb-10">Welcome, {{ display_name }}!</h1>
 
-    <p class="mb-4">
-        <a href="/app/projects/new" class="text-blue-600 hover:text-blue-500">Create a project</a>
-    </p>
-    <p class="mb-4">
-        <a href="/app/projects" class="text-blue-600 hover:text-blue-500">View projects</a>
-    </p>
-    <p class="mb-4">
-        <a href="/app/account" class="text-blue-600 hover:text-blue-500">Account</a>
-    </p>
-    <p class="mb-4">
-        <a href="/app/integrations" class="text-blue-600 hover:text-blue-500">Integrations</a>
-    </p>
-    <p class="mb-4">
-        <a href="/app/settings/organization" class="text-blue-600 hover:text-blue-500">Organization</a>
-    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div class="space-y-6">
+            <a href="/app/projects/new" class="group flex items-start gap-4 rounded-xl bg-white p-5 shadow-md border border-border-subtle hover:shadow-lg transition-shadow">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-sky-100 flex items-center justify-center group-hover:bg-sky-200/80 transition-colors">
+                    <span class="material-symbols-outlined text-sky-600 text-2xl -rotate-12">add_box</span>
+                </div>
+                <div>
+                    <h2 class="font-bold text-charcoal text-lg mb-1">Create a project</h2>
+                    <p class="text-slate-500 text-sm">Start a new collaborative workspace.</p>
+                </div>
+            </a>
+            <a href="/app/projects" class="group flex items-start gap-4 rounded-xl bg-white p-5 shadow-md border border-border-subtle hover:shadow-lg transition-shadow">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200/80 transition-colors">
+                    <span class="material-symbols-outlined text-emerald-600 text-2xl">folder</span>
+                </div>
+                <div>
+                    <h2 class="font-bold text-charcoal text-lg mb-1">View projects</h2>
+                    <p class="text-slate-500 text-sm">Access all your existing project boards.</p>
+                </div>
+            </a>
+        </div>
+        <div class="space-y-6">
+            <a href="/app/account" class="group flex items-start gap-4 rounded-xl bg-white p-5 shadow-md border border-border-subtle hover:shadow-lg transition-shadow">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-slate-200/80 transition-colors">
+                    <span class="material-symbols-outlined text-slate-600 text-2xl">manage_accounts</span>
+                </div>
+                <div>
+                    <h2 class="font-bold text-charcoal text-lg mb-1">Account</h2>
+                    <p class="text-slate-500 text-sm">Manage your profile and settings.</p>
+                </div>
+            </a>
+            <a href="/app/integrations" class="group flex items-start gap-4 rounded-xl bg-white p-5 shadow-md border border-border-subtle hover:shadow-lg transition-shadow">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-slate-200/80 transition-colors">
+                    <span class="material-symbols-outlined text-slate-600 text-2xl">link</span>
+                </div>
+                <div>
+                    <h2 class="font-bold text-charcoal text-lg mb-1">Integrations</h2>
+                    <p class="text-slate-500 text-sm">Connect your favorite tools and apps.</p>
+                </div>
+            </a>
+            <a href="/app/settings/organization" class="group flex items-start gap-4 rounded-xl bg-white p-5 shadow-md border border-border-subtle hover:shadow-lg transition-shadow">
+                <div class="flex-shrink-0 w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-slate-200/80 transition-colors">
+                    <span class="material-symbols-outlined text-slate-600 text-2xl">corporate_fare</span>
+                </div>
+                <div>
+                    <h2 class="font-bold text-charcoal text-lg mb-1">Organization</h2>
+                    <p class="text-slate-500 text-sm">View team members and roles.</p>
+                </div>
+            </a>
+        </div>
+    </div>
 
-    <form method="post" action="/logout" class="mb-4">
-        <button
-            type="submit"
-            class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-        >
-            Log Out
-        </button>
-    </form>
-
-    <p class="text-center">
-        <a href="/" class="text-blue-600 hover:text-blue-500">Back to home</a>
-    </p>
+    <div class="flex justify-center">
+        <form method="post" action="/logout">
+            <button
+                type="submit"
+                class="inline-flex items-center gap-2 bg-red-600 text-white py-2.5 px-6 rounded-xl font-bold hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+            >
+                <span class="material-symbols-outlined !text-xl">logout</span>
+                Log Out
+            </button>
+        </form>
+    </div>
 </div>
 {% endblock %}

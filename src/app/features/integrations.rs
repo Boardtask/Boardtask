@@ -9,6 +9,7 @@ use axum::{
 
 use crate::app::{
     db,
+    domain::UserId,
     session::AuthenticatedSession,
     tenant,
     AppState, APP_NAME,
@@ -20,6 +21,7 @@ use crate::app::{
 pub struct IntegrationsTemplate {
     pub app_name: &'static str,
     pub integrations: Vec<db::integrations::Integration>,
+    pub current_user_avatar_url: String,
 }
 
 /// GET /app/integrations — List allowed integrations with "coming soon" message (org-scoped).
@@ -39,9 +41,17 @@ pub async fn show(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response(),
     };
 
+    let user_id = match UserId::from_string(&session.user_id) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Invalid session".to_string()).into_response(),
+    };
+    let current_user_avatar_url =
+        db::users::profile_image_url_for(&state.db, &user_id).await;
+
     let template = IntegrationsTemplate {
         app_name: APP_NAME,
         integrations,
+        current_user_avatar_url,
     };
 
     match template.render() {

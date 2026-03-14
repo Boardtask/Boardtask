@@ -19,6 +19,7 @@ use crate::app::{
 pub struct DashboardTemplate {
     pub app_name: &'static str,
     pub display_name: String,
+    pub current_user_avatar_url: String,
 }
 
 /// GET /app — Show dashboard. Requires a valid session; redirects to /login if unauthenticated.
@@ -35,9 +36,13 @@ pub async fn show(
         _ => return Redirect::to("/login").into_response(),
     };
     let display_name = db::users::display_name(&user);
+    let current_user_avatar_url =
+        db::users::profile_image_url_for(&state.db, &user_id)
+            .await;
     let template = DashboardTemplate {
         app_name: APP_NAME,
         display_name,
+        current_user_avatar_url,
     };
     Html(template.render().unwrap_or_else(|_| "Template error".to_string())).into_response()
 }

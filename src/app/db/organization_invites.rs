@@ -52,6 +52,19 @@ where
     Ok(())
 }
 
+/// Find an invite by ID (for revoke/resend).
+pub async fn find_by_id<'e, E>(executor: E, id: &str) -> Result<Option<OrganizationInvite>, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    sqlx::query_as::<_, OrganizationInvite>(
+        "SELECT id, organization_id, email, role, invited_by_user_id, token, expires_at, created_at FROM organization_invites WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(executor)
+    .await
+}
+
 /// Find an invite by token. Returns the invite if it exists and has not expired.
 /// Does not return invites that have been deleted (after accept).
 pub async fn find_by_token<'e, E>(

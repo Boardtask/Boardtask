@@ -1,9 +1,8 @@
-{% extends "base.html" %}
+{% extends "app/app_layout.html" %}
 
 {% block title %}{{ project.title }} (List) · {{ app_name }}{% endblock %}
 
-{% block content %}
-<div class="w-full min-h-screen flex flex-col pt-8 px-6">
+{% block app_content %}
     <div x-data="projectList('{{ project.id }}')"
         class="project-list-view bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
         <div class="flex justify-between items-center mb-4 px-6 pt-4">
@@ -150,7 +149,6 @@
     </div>
 
     <p class="text-xs text-gray-400 mt-4">Project ID: {{ project.id }}</p>
-</div>
 
 <script type="application/json" id="project-tasks-data">{{ task_rows_json|safe }}</script>
 {% endblock %}

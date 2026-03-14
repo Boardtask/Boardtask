@@ -1,90 +1,161 @@
-{% extends "base.html" %}
+{% extends "app/app_layout.html" %}
 
-{% block title %}Projects · {{ app_name }}{% endblock %}
+{% block title %}Active Projects · {{ app_name }}{% endblock %}
 
-{% block content %}
-<div class="max-w-3xl mx-auto mt-8 px-4">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold mb-2">Projects</h1>
-        <p class="text-text-secondary">Create, import, or open projects</p>
-    </div>
+{% block app_extra_head %}
+<style type="text/tailwindcss">
+    .table-row-hover:hover {
+        background: #f8fafc;
+    }
+</style>
+{% endblock %}
 
-    <div class="mb-6">
-        <a href="/app/projects/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 text-white font-medium rounded-lg transition-colors">
-            <span class="material-symbols-outlined">add</span>
-            Create a project
-        </a>
-    </div>
-
-    <div class="mb-6" x-data="projectImport()">
-        <h2 class="text-lg font-semibold mb-3">Import Project</h2>
-        <p class="text-sm text-gray-600 mb-2">Create a new project from an exported JSON file.</p>
-        <div class="flex flex-col gap-2">
-            <input type="file" id="import-project-file-list" accept=".json,application/json" class="text-sm text-gray-600 file:mr-2 file:py-2 file:px-4 file:rounded file:border file:border-gray-300 file:bg-white file:text-charcoal">
-            <button type="button" @click="importFromFile()"
-                class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 text-white font-medium rounded-lg transition-colors text-sm w-fit">
-                <span class="material-symbols-outlined text-lg">upload</span>
-                Import from file
-            </button>
-            <p x-show="importError" x-text="importError" class="text-sm text-red-600"></p>
+{% block app_content %}
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+            <div class="space-y-2">
+                <h1 class="text-4xl font-extrabold text-charcoal tracking-tight">Active Projects</h1>
+                <p class="text-slate-500 text-lg max-w-2xl">Monitor and orchestrate your team's engineering workflows across all active boards.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="glass-replacement px-4 py-2 rounded-lg flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors">
+                    <span class="material-symbols-outlined !text-base text-primary">filter_list</span>
+                    All Statuses
+                </div>
+                <div class="glass-replacement px-4 py-2 rounded-lg flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:bg-slate-50 transition-colors">
+                    <span class="material-symbols-outlined !text-base text-primary">sort</span>
+                    Last Updated
+                </div>
+            </div>
         </div>
-    </div>
-
-    <table class="table w-full border border-gray-200">
-        <thead>
-            <tr class="border-b border-gray-200">
-                <th class="text-left p-3 font-semibold">Name</th>
-                <th class="text-left p-3 font-semibold">Team</th>
-                <th class="text-left p-3 font-semibold">Created by</th>
-                <th class="text-left p-3 font-semibold">Tasks</th>
-                <th class="text-left p-3 font-semibold">Progress</th>
-                <th class="text-left p-3 font-semibold">Actions</th>
-                <th class="text-left p-3 font-semibold">Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for project in projects %}
-            <tr class="border-b border-gray-200">
-                <td class="p-3">
-                    <a href="/app/projects/{{ project.id }}" class="text-primary underline">{{ project.title }}</a>
-                </td>
-                <td class="p-3 text-text-secondary">{{ project.team_name }}</td>
-                <td class="p-3 text-text-secondary">{{ project.creator_name }}</td>
-                <td class="p-3 text-text-secondary">{{ project.completed_count }}/{{ project.node_count }}</td>
-                <td class="p-3 text-text-secondary">
-                    <div class="flex items-center gap-2">
-                        <div class="w-16 h-2 bg-gray-200 rounded">
-                            <div class="h-full bg-green-500 rounded" style="width: {{ project.progress_percent }}%"></div>
-                        </div>
-                        <span class="text-sm">{{ project.progress_percent }}%</span>
-                    </div>
-                </td>
-                <td class="p-3 text-text-secondary">
-                    <div class="flex items-center gap-2">
-                        <a href="/app/projects/{{ project.id }}" class="text-primary underline text-sm">Open</a>
-                        <a href="/api/projects/{{ project.id }}/export" download class="text-primary underline text-sm">Export</a>
-                        <form method="POST" action="/api/projects/{{ project.id }}/delete" class="inline"
-                              onsubmit="return confirm('Are you sure you want to delete this project? This action cannot be undone.')">
-                            <input type="hidden" name="_method" value="DELETE">
-                            <button type="submit" class="text-red-600 underline text-sm hover:text-red-800">Delete</button>
-                        </form>
-                    </div>
-                </td>
-                <td class="p-3 text-text-secondary">{{ project.created_at_display }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" class="p-8 text-center text-text-secondary">
-                    <p class="mb-2">No projects yet.</p>
-                    <p class="text-sm">Create your first project or import from JSON.</p>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <p class="mt-6 text-center">
-        <a href="/app" class="text-primary underline">Back to dashboard</a>
-    </p>
-</div>
+        <div class="glass-replacement rounded-2xl overflow-hidden mb-8 shadow-sm">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-border-subtle bg-slate-50/50">
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                                <div class="flex items-center gap-2 cursor-pointer hover:text-charcoal transition-colors">
+                                    Project Title
+                                    <span class="material-symbols-outlined !text-sm">unfold_more</span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                                <div class="flex items-center gap-2 cursor-pointer hover:text-charcoal transition-colors">
+                                    Progress
+                                    <span class="material-symbols-outlined !text-sm">unfold_more</span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 text-center">
+                                <div class="flex items-center justify-center gap-2 cursor-pointer hover:text-charcoal transition-colors">
+                                    Tasks
+                                    <span class="material-symbols-outlined !text-sm">unfold_more</span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 text-center">
+                                <div class="flex items-center justify-center gap-2 cursor-pointer hover:text-charcoal transition-colors">
+                                    Blockers
+                                    <span class="material-symbols-outlined !text-sm">unfold_more</span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                                Team
+                            </th>
+                            <th class="px-6 py-4"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-subtle">
+                        {% for project in projects %}
+                        <tr class="table-row-hover transition-colors group">
+                            <td class="px-6 py-4">
+                                <a href="/app/projects/{{ project.id }}" class="flex flex-col block">
+                                    <span class="text-charcoal font-bold group-hover:text-primary transition-colors">{{ project.title }}</span>
+                                    {% if project.description != "" %}
+                                    <span class="text-xs text-slate-400 line-clamp-1">{{ project.description }}</span>
+                                    {% endif %}
+                                </a>
+                            </td>
+                            <td class="px-6 py-4 min-w-[200px]">
+                                <div class="space-y-1.5">
+                                    <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                                        <span>{{ project.phase_label }}</span>
+                                        <span class="text-charcoal">{{ project.progress_percent }}%</span>
+                                    </div>
+                                    <div class="w-full h-1.5 bg-slate-100 rounded-full flex overflow-hidden">
+                                        <div class="h-full bg-primary transition-all" style="width: {{ project.progress_percent }}%"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="text-charcoal font-semibold">{{ project.node_count }}</span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                {% if project.blocker_count > 0 %}
+                                <span class="text-rose-600 font-bold">{{ project.blocker_count }}</span>
+                                {% else %}
+                                <span class="text-emerald-600 font-bold">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex -space-x-2">
+                                    {% for url in project.team_avatar_urls %}
+                                    {% if url != "" %}
+                                    <img alt="Team member" class="size-7 rounded-full border-2 border-white object-cover" src="{{ url }}"/>
+                                    {% else %}
+                                    <div class="size-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-slate-500">
+                                        <span class="material-symbols-outlined !text-sm">person</span>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                    {% if project.team_overflow > 0 %}
+                                    <div class="size-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-600">+{{ project.team_overflow }}</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <a href="/app/projects/{{ project.id }}" class="text-primary hover:text-primary/80 transition-colors p-1 inline-block">
+                                    <span class="material-symbols-outlined">chevron_right</span>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-12 text-center text-slate-500">
+                                No projects yet. Create your first project to get started.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4 border-t border-border-subtle bg-slate-50/30">
+                <a href="/app/projects/new" class="w-full py-3 rounded-xl border border-dashed border-slate-300 hover:bg-slate-50 hover:border-primary/40 transition-all flex items-center justify-center gap-2 group block">
+                    <span class="material-symbols-outlined !text-lg text-slate-400 group-hover:text-primary">add_circle</span>
+                    <span class="text-sm font-bold text-slate-500 group-hover:text-charcoal">Create New Project</span>
+                </a>
+            </div>
+        </div>
+        <div class="glass-replacement rounded-2xl p-6 flex flex-wrap items-center justify-between gap-8 shadow-sm">
+            <div class="flex items-center gap-4">
+                <div class="size-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined !text-3xl">analytics</span>
+                </div>
+                <div>
+                    <p class="text-slate-500 text-xs font-bold uppercase tracking-widest">Global Efficiency</p>
+                    <p class="text-2xl font-black text-charcoal">{{ global_efficiency_display }}%</p>
+                </div>
+            </div>
+            <div class="flex gap-10">
+                <div class="flex flex-col">
+                    <span class="text-slate-400 text-xs font-bold uppercase">Total Tasks</span>
+                    <span class="text-lg font-bold text-charcoal">{{ total_tasks }}</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-slate-400 text-xs font-bold uppercase">Active Blockers</span>
+                    <span class="text-lg font-bold text-rose-600">{{ total_blockers }}</span>
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-slate-400 text-xs font-bold uppercase">Contributors</span>
+                    <span class="text-lg font-bold text-charcoal">{{ contributor_count }}</span>
+                </div>
+            </div>
+        </div>
 {% endblock %}

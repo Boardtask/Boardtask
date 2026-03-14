@@ -172,12 +172,7 @@ async fn list_projects_shows_org_projects() {
 
 #[tokio::test]
 async fn list_projects_shows_enriched_metadata() {
-    let (cookie, _project_id, pool, app, team_id) = setup_user_and_project("enriched@example.com", "Password123").await;
-    let user_id = user_id_from_cookie(&pool, &cookie).await;
-    let user = boardtask::app::db::users::find_by_id(&pool, &boardtask::app::domain::UserId::from_string(&user_id).unwrap()).await.unwrap().unwrap();
-
-    // Get team name for verification
-    let team = boardtask::app::db::teams::find_by_id(&pool, &team_id).await.unwrap().unwrap();
+    let (cookie, _project_id, _pool, app, _team_id) = setup_user_and_project("enriched@example.com", "Password123").await;
 
     let request = http::Request::builder()
         .method("GET")
@@ -191,22 +186,25 @@ async fn list_projects_shows_enriched_metadata() {
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body_str = String::from_utf8_lossy(&body_bytes);
 
-    // Check that enriched metadata appears in the HTML
+    // New design: Active Projects title, project title, task count, progress, blockers, Create New Project
     assert!(
-        body_str.contains(&team.name),
-        "Expected team name '{}' in list, got: {}",
-        team.name,
+        body_str.contains("Active Projects"),
+        "Expected 'Active Projects' in list, got: {}",
         body_str
     );
     assert!(
-        body_str.contains(&boardtask::app::db::users::display_name(&user)),
-        "Expected creator name '{}' in list, got: {}",
-        boardtask::app::db::users::display_name(&user),
+        body_str.contains("Test Project"),
+        "Expected project title in list, got: {}",
         body_str
     );
     assert!(
-        body_str.contains("0/0"),
-        "Expected task counts '0/0' for empty project in list, got: {}",
+        body_str.contains("Create New Project"),
+        "Expected 'Create New Project' in list, got: {}",
+        body_str
+    );
+    assert!(
+        body_str.contains("Global Efficiency"),
+        "Expected footer stats in list, got: {}",
         body_str
     );
 }

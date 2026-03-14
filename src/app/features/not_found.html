@@ -1,0 +1,24 @@
+{% extends "app/app_layout.html" %}
+
+{% block title %}Page not found · {{ app_name }}{% endblock %}
+
+{% block app_content %}
+<div class="relative min-h-[60vh] flex flex-col items-center justify-center overflow-hidden">
+  <div class="absolute inset-0 flex items-center justify-center overflow-visible pointer-events-none" style="z-index: 0;" aria-hidden="true">
+    <div class="text-[clamp(14rem,45vw,32rem)] font-extrabold select-none leading-none tracking-tighter text-slate-400 opacity-10" style="font-family: var(--font-sans);">404</div>
+  </div>
+  <div class="relative text-center px-6 max-w-lg" style="z-index: 1;">
+    <h1 class="text-3xl md:text-4xl font-bold text-charcoal mb-4">Lost in Transit</h1>
+    <p class="text-taupe text-lg mb-10">The page you're looking for has moved or doesn't exist. Let's get you back on track.</p>
+    <a href="/app" class="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3.5 rounded-xl font-semibold transition-colors shadow-md">
+      <span class="material-symbols-outlined !text-xl">home</span>
+      Return to Dashboard
+    </a>
+    <nav class="mt-16 flex items-center justify-center gap-2 text-sm text-taupe">
+      <a href="mailto:support@boardtask.com" class="hover:text-charcoal transition-colors">Contact support</a>
+      <span aria-hidden="true">·</span>
+      <a href="mailto:support@boardtask.com?subject=Issue%20Report" class="hover:text-charcoal transition-colors">Report an issue</a>
+    </nav>
+  </div>
+</div>
+{% endblock %}

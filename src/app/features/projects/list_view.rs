@@ -9,6 +9,7 @@ use axum::{
 
 use crate::app::{
     db,
+    domain::UserId,
     session::AuthenticatedSession,
     tenant,
     AppState, APP_NAME,
@@ -34,6 +35,7 @@ pub struct ProjectListViewTemplate {
     pub project: db::projects::Project,
     pub task_rows: Vec<TaskRow>,
     pub task_rows_json: String,
+    pub current_user_avatar_url: String,
 }
 
 /// GET /app/projects/:id/list — List view of project tasks.
@@ -119,11 +121,19 @@ pub async fn list_view(
     )
     .unwrap_or_else(|_| "[]".to_string());
 
+    let user_id = match UserId::from_string(&session.user_id) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Invalid session".to_string()).into_response(),
+    };
+    let current_user_avatar_url =
+        db::users::profile_image_url_for(&state.db, &user_id).await;
+
     ProjectListViewTemplate {
         app_name: APP_NAME,
         project,
         task_rows,
         task_rows_json,
+        current_user_avatar_url,
     }
     .into_response()
 }

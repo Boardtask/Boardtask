@@ -11,6 +11,7 @@ use validator::Validate;
 
 use crate::app::{
     db,
+    domain::UserId,
     session::AuthenticatedSession,
     tenant,
     AppState, APP_NAME,
@@ -33,6 +34,7 @@ pub struct CreateProjectTemplate {
     pub title: String,
     pub teams: Vec<db::teams::Team>,
     pub selected_team_id: String,
+    pub current_user_avatar_url: String,
 }
 
 /// GET /app/projects/new — Show project creation form.
@@ -51,12 +53,19 @@ pub async fn show_form(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()).into_response(),
     };
     let selected_team_id = teams.first().map(|t| t.id.clone()).unwrap_or_default();
+    let user_id = match UserId::from_string(&session.user_id) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Invalid session".to_string()).into_response(),
+    };
+    let current_user_avatar_url =
+        db::users::profile_image_url_for(&state.db, &user_id).await;
     CreateProjectTemplate {
         app_name: APP_NAME,
         error: String::new(),
         title: String::new(),
         teams,
         selected_team_id,
+        current_user_avatar_url,
     }
     .into_response()
 }
@@ -72,12 +81,17 @@ pub async fn create(
             .await
             .unwrap_or_default();
         let selected_team_id = form.team_id.clone();
+        let user_id = UserId::from_string(&session.user_id)
+            .unwrap_or_else(|_| UserId::new());
+        let current_user_avatar_url =
+            db::users::profile_image_url_for(&state.db, &user_id).await;
         let template = CreateProjectTemplate {
             app_name: APP_NAME,
             error: "Title must be 1–255 characters".to_string(),
             title: form.title.clone(),
             teams,
             selected_team_id,
+            current_user_avatar_url,
         };
         return Html(
             template
@@ -99,12 +113,17 @@ pub async fn create(
         let teams = db::teams::find_by_organization(&state.db, &session.organization_id)
             .await
             .unwrap_or_default();
+        let user_id = UserId::from_string(&session.user_id)
+            .unwrap_or_else(|_| UserId::new());
+        let current_user_avatar_url =
+            db::users::profile_image_url_for(&state.db, &user_id).await;
         let template = CreateProjectTemplate {
             app_name: APP_NAME,
             error: "Please select a team.".to_string(),
             title: form.title.clone(),
             teams,
             selected_team_id: String::new(),
+            current_user_avatar_url,
         };
         return Html(
             template

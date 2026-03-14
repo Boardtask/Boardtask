@@ -1,149 +1,283 @@
-{% extends "base.html" %}
+{% extends "app/app_layout.html" %}
 
-{% block title %}Account · {{ app_name }}{% endblock %}
+{% block title %}Account Settings · {{ app_name }}{% endblock %}
 
-{% block content %}
-<div class="max-w-md mx-auto mt-8">
-    <h1 class="text-2xl font-bold mb-6">Account</h1>
-
-    <p class="mb-2 text-gray-700">
-        <span class="font-medium">Email:</span> {{ email }}
-    </p>
-    <p class="mb-6 text-gray-700">
-        <span class="font-medium">Email verified:</span> {% if email_verified %}Yes{% else %}No{% endif %}
-    </p>
-
-    <h2 class="text-lg font-semibold mb-3">Profile image</h2>
-    <p class="mb-3 text-sm text-gray-500">Optional. Use an HTTPS URL to an image (e.g. Gravatar).</p>
-    {% if profile_image_url_display != "" %}
-    <p class="mb-2">
-        <img src="{{ profile_image_url_display }}" alt="Profile" class="w-16 h-16 rounded-full object-cover border border-gray-300">
-    </p>
-    {% endif %}
-    <form method="post" action="/app/account/update-profile-image" class="space-y-4 mb-6">
-        <div>
-            <label for="profile_image_url" class="block text-sm font-medium text-gray-700">Profile image URL</label>
-            <input
-                type="url"
-                id="profile_image_url"
-                name="profile_image_url"
-                placeholder="https://..."
-                value="{{ profile_image_url_value }}"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-            <p class="mt-1 text-sm text-gray-500">Leave empty to remove. Must be HTTPS and point to an image (.jpg, .png, .gif, .webp).</p>
-        </div>
-        <button
-            type="submit"
-            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-            Update profile image
-        </button>
-    </form>
-
-    <h2 class="text-lg font-semibold mb-3">Name</h2>
-    <p class="mb-3 text-sm text-gray-500">First and last name are required and cannot be empty.</p>
-    <form method="post" action="/app/account/update-name" class="space-y-4 mb-6">
-        <div>
-            <label for="first_name" class="block text-sm font-medium text-gray-700">First name <span class="text-red-600">*</span></label>
-            <input
-                type="text"
-                id="first_name"
-                name="first_name"
-                required
-                minlength="1"
-                maxlength="100"
-                pattern=".*\S.*"
-                title="At least one non-whitespace character required"
-                value="{{ first_name_value }}"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+{% block app_content %}
+<div class="max-w-4xl space-y-12">
+    {# Header #}
+    <div class="flex items-center gap-3">
+        <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary !text-2xl">settings</span>
         </div>
         <div>
-            <label for="last_name" class="block text-sm font-medium text-gray-700">Last name <span class="text-red-600">*</span></label>
-            <input
-                type="text"
-                id="last_name"
-                name="last_name"
-                required
-                minlength="1"
-                maxlength="100"
-                pattern=".*\S.*"
-                title="At least one non-whitespace character required"
-                value="{{ last_name_value }}"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+            <h1 class="text-3xl font-bold text-charcoal tracking-tight">Account Settings</h1>
+            <p class="text-slate-500 mt-0.5">Manage your profile, security, and preferences.</p>
         </div>
-        <button
-            type="submit"
-            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-            Update name
-        </button>
-    </form>
+    </div>
 
+    {# Flash messages #}
     {% if error != "" %}
-    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
         {{ error }}
     </div>
     {% endif %}
-
     {% if success != "" %}
-    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-        {% if success == "name_updated" %}Name updated.{% else %}{% if success == "profile_image_updated" %}Profile image updated.{% else %}Password updated successfully.{% endif %}{% endif %}
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl">
+        {% if success == "name_updated" %}Profile updated.{% else if success == "profile_image_updated" %}Profile image updated.{% else if success == "password_changed" %}Password updated successfully.{% else if success == "preferences_updated" %}Preferences saved.{% else if success == "account_deleted" %}Your account has been deleted.{% else %}{{ success }}{% endif %}
     </div>
     {% endif %}
 
-    <h2 class="text-lg font-semibold mb-3">Change password</h2>
-    <form method="post" action="/app/account/change-password" class="space-y-4 mb-6">
-        <div>
-            <label for="current_password" class="block text-sm font-medium text-gray-700">Current password</label>
-            <input
-                type="password"
-                id="current_password"
-                name="current_password"
-                required
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+    {# Profile Information #}
+    <section class="glass-replacement rounded-2xl overflow-hidden shadow-sm">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 lg:p-8">
+            <div class="lg:col-span-1">
+                <h2 class="text-lg font-bold text-charcoal">Profile Information</h2>
+                <p class="text-sm text-slate-500 mt-1">Update your personal details and how others see you on the platform.</p>
+            </div>
+            <div class="lg:col-span-2">
+                <form method="post" action="/app/account/update-profile" class="space-y-6">
+                    <div class="flex items-start gap-6">
+                        <div class="relative flex-shrink-0">
+                            {% if profile_image_url_display != "" %}
+                            <img src="{{ profile_image_url_display }}" alt="Profile" class="w-20 h-20 rounded-full object-cover border-2 border-border-subtle">
+                            {% else %}
+                            <div class="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-slate-400 !text-3xl">person</span>
+                            </div>
+                            {% endif %}
+                            <span class="absolute bottom-0 right-0 size-7 bg-primary rounded-full flex items-center justify-center text-white shadow">
+                                <span class="material-symbols-outlined !text-sm">edit</span>
+                            </span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-semibold text-charcoal">{{ full_name }}</p>
+                            <p class="text-sm text-slate-500 mt-1">SVG, PNG or JPG (max. 800x800px)</p>
+                            <input
+                                type="url"
+                                name="profile_image_url"
+                                placeholder="https://..."
+                                value="{{ profile_image_url_value }}"
+                                class="mt-2 form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm"
+                            >
+                        </div>
+                    </div>
+                    <div>
+                        <label for="first_name" class="block text-sm font-medium text-charcoal mb-1.5">First name <span class="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            id="first_name"
+                            name="first_name"
+                            required
+                            minlength="1"
+                            maxlength="100"
+                            value="{{ first_name_value }}"
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                    </div>
+                    <div>
+                        <label for="last_name" class="block text-sm font-medium text-charcoal mb-1.5">Last name <span class="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            id="last_name"
+                            name="last_name"
+                            required
+                            minlength="1"
+                            maxlength="100"
+                            value="{{ last_name_value }}"
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                    </div>
+                    <div>
+                        <label for="email_display" class="block text-sm font-medium text-charcoal mb-1.5">Email Address</label>
+                        <input
+                            type="text"
+                            id="email_display"
+                            value="{{ email }}"
+                            readonly
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl bg-slate-50 text-slate-600 cursor-not-allowed"
+                        >
+                        <p class="text-sm text-slate-500 mt-1">{% if email_verified %}✓ Verified{% else %}Not verified{% endif %}</p>
+                    </div>
+                    <div>
+                        <label for="bio" class="block text-sm font-medium text-charcoal mb-1.5">Bio</label>
+                        <textarea
+                            id="bio"
+                            name="bio"
+                            rows="4"
+                            maxlength="500"
+                            placeholder="Tell us about yourself..."
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+                        >{{ bio_value }}</textarea>
+                        <p class="text-sm text-slate-500 mt-1">A short bio for your profile.</p>
+                    </div>
+                    <button
+                        type="submit"
+                        class="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-primary/20"
+                    >
+                        Update Profile
+                    </button>
+                </form>
+            </div>
         </div>
+    </section>
 
-        <div>
-            <label for="new_password" class="block text-sm font-medium text-gray-700">New password</label>
-            <input
-                type="password"
-                id="new_password"
-                name="new_password"
-                required
-                minlength="8"
-                maxlength="128"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-            <p class="mt-1 text-sm text-gray-500">
-                Must be 8–128 characters with uppercase, lowercase, and digit.
-            </p>
+    {# Security #}
+    <section class="glass-replacement rounded-2xl overflow-hidden shadow-sm">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 lg:p-8">
+            <div class="lg:col-span-1">
+                <h2 class="text-lg font-bold text-charcoal">Security</h2>
+                <p class="text-sm text-slate-500 mt-1">Manage your password and account protection settings.</p>
+            </div>
+            <div class="lg:col-span-2 space-y-6">
+                <form method="post" action="/app/account/change-password" class="space-y-4">
+                    <div>
+                        <label for="current_password" class="block text-sm font-medium text-charcoal mb-1.5">Current Password</label>
+                        <input
+                            type="password"
+                            id="current_password"
+                            name="current_password"
+                            required
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                    </div>
+                    <div>
+                        <label for="new_password" class="block text-sm font-medium text-charcoal mb-1.5">New Password</label>
+                        <input
+                            type="password"
+                            id="new_password"
+                            name="new_password"
+                            required
+                            minlength="8"
+                            maxlength="128"
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                    </div>
+                    <div>
+                        <label for="confirm_password" class="block text-sm font-medium text-charcoal mb-1.5">Confirm Password</label>
+                        <input
+                            type="password"
+                            id="confirm_password"
+                            name="confirm_password"
+                            required
+                            class="form-input w-full px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                    </div>
+                    <p class="text-sm text-slate-500">Must be 8–128 characters with uppercase, lowercase, and digit.</p>
+                    <button
+                        type="submit"
+                        class="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-primary/20"
+                    >
+                        Update Password
+                    </button>
+                </form>
+
+                <div class="pt-6 border-t border-border-subtle">
+                    <div class="flex items-start gap-4">
+                        <span class="material-symbols-outlined text-emerald-600 !text-2xl">check_circle</span>
+                        <div>
+                            <h3 class="font-semibold text-charcoal">Two-factor Authentication</h3>
+                            <p class="text-sm text-slate-500 mt-0.5">Add an extra layer of security to your account.</p>
+                            <button type="button" class="mt-3 px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+                                Enable
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+    </section>
 
-        <div>
-            <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm new password</label>
-            <input
-                type="password"
-                id="confirm_password"
-                name="confirm_password"
-                required
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+    {# Preferences #}
+    <section class="glass-replacement rounded-2xl overflow-hidden shadow-sm">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 lg:p-8">
+            <div class="lg:col-span-1">
+                <h2 class="text-lg font-bold text-charcoal">Preferences</h2>
+                <p class="text-sm text-slate-500 mt-1">Tailor the application experience to your liking.</p>
+            </div>
+            <div class="lg:col-span-2">
+                <form method="post" action="/app/account/update-preferences" class="space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h3 class="font-semibold text-charcoal">Email Notifications</h3>
+                            <p class="text-sm text-slate-500 mt-0.5">Receive weekly digests and account activity reports.</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input
+                                type="checkbox"
+                                name="email_notifications"
+                                value="1"
+                                {% if email_notifications %}checked{% endif %}
+                                class="sr-only peer"
+                            >
+                            <div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-primary peer-focus:ring-4 peer-focus:ring-primary/30 transition-colors"></div>
+                            <div class="absolute left-1 top-1 bg-white rounded-full h-4 w-4 transition-transform peer-checked:translate-x-5 shadow"></div>
+                        </label>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h3 class="font-semibold text-charcoal">Theme Mode</h3>
+                            <p class="text-sm text-slate-500 mt-0.5">Switch between light and dark visual styles.</p>
+                        </div>
+                        <div class="flex rounded-xl overflow-hidden border border-border-subtle p-0.5 bg-slate-50">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="theme_mode" value="light" {% if theme_mode == "light" %}checked{% endif %} class="sr-only peer">
+                                <span class="block px-4 py-2 text-sm font-medium rounded-lg peer-checked:bg-white peer-checked:shadow peer-checked:text-charcoal text-slate-500">Light</span>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="theme_mode" value="dark" {% if theme_mode == "dark" %}checked{% endif %} class="sr-only peer">
+                                <span class="block px-4 py-2 text-sm font-medium rounded-lg peer-checked:bg-white peer-checked:shadow peer-checked:text-charcoal text-slate-500">Dark</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h3 class="font-semibold text-charcoal">Language</h3>
+                        </div>
+                        <select
+                            name="language"
+                            class="form-select w-full sm:w-64 px-4 py-2.5 border border-border-subtle rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        >
+                            <option value="en-US" {% if language == "en-US" %}selected{% endif %}>English (United States)</option>
+                            <option value="en-GB" {% if language == "en-GB" %}selected{% endif %}>English (United Kingdom)</option>
+                            <option value="es" {% if language == "es" %}selected{% endif %}>Spanish</option>
+                            <option value="fr" {% if language == "fr" %}selected{% endif %}>French</option>
+                            <option value="de" {% if language == "de" %}selected{% endif %}>German</option>
+                        </select>
+                    </div>
+                    <button
+                        type="submit"
+                        class="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-primary/20"
+                    >
+                        Save Preferences
+                    </button>
+                </form>
+            </div>
         </div>
+    </section>
 
-        <button
-            type="submit"
-            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-            Change password
-        </button>
-    </form>
-
-    <p class="text-center">
-        <a href="/app" class="text-blue-600 hover:text-blue-500">Back to dashboard</a>
-    </p>
+    {# Danger Zone #}
+    <section class="glass-replacement rounded-2xl overflow-hidden shadow-sm border-2 border-red-200">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 lg:p-8">
+            <div class="lg:col-span-1">
+                <h2 class="text-lg font-bold text-red-700">Danger Zone</h2>
+                <p class="text-sm text-slate-500 mt-1">Permanently delete your account and data.</p>
+            </div>
+            <div class="lg:col-span-2">
+                <div class="p-4 rounded-xl bg-red-50 border border-red-100">
+                    <h3 class="font-semibold text-red-800">Delete Account</h3>
+                    <p class="text-sm text-red-700 mt-1">This action is irreversible. All your data will be wiped.</p>
+                    <form method="post" action="/app/account/delete" class="mt-4" onsubmit="return confirm('Are you sure you want to permanently delete your account? This cannot be undone.');">
+                        <input type="hidden" name="confirm_delete" value="1">
+                        <button
+                            type="submit"
+                            class="flex items-center justify-center gap-2 border-2 border-dashed border-red-500 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                        >
+                            Delete My Account
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
 </div>
 {% endblock %}

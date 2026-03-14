@@ -92,8 +92,28 @@ pub fn change_password_form_body(
     )
 }
 
-pub fn update_profile_image_form_body(profile_image_url: &str) -> String {
-    format!("profile_image_url={}", urlencoding::encode(profile_image_url))
+/// Form body for update-profile (combines name, image, bio). Uses Test/User as default names.
+pub fn update_profile_form_body(profile_image_url: &str) -> String {
+    update_profile_form_body_full("Test", "User", profile_image_url, None)
+}
+
+/// Full form body for update-profile with all fields.
+pub fn update_profile_form_body_full(
+    first_name: &str,
+    last_name: &str,
+    profile_image_url: &str,
+    bio: Option<&str>,
+) -> String {
+    let mut s = format!(
+        "first_name={}&last_name={}&profile_image_url={}",
+        urlencoding::encode(first_name),
+        urlencoding::encode(last_name),
+        urlencoding::encode(profile_image_url)
+    );
+    if let Some(b) = bio {
+        s.push_str(&format!("&bio={}", urlencoding::encode(b)));
+    }
+    s
 }
 
 pub fn extract_session_id_from_cookie(set_cookie_header: &str) -> Option<&str> {

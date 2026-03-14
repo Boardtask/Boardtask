@@ -73,3 +73,42 @@ where
     .await?;
     Ok(count > 0)
 }
+
+/// Profile URL for a team member (for avatar display).
+#[derive(Debug, FromRow)]
+pub struct TeamMemberAvatar {
+    pub profile_image_url: Option<String>,
+}
+
+/// List profile image URLs for team members (for project list Team column).
+/// Returns up to 7 URLs; empty string for members without an image (placeholder).
+pub async fn list_avatar_urls_for_team<'e, E>(
+    executor: E,
+    team_id: &str,
+) -> Result<Vec<String>, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    let rows = sqlx::query_as::<_, TeamMemberAvatar>(
+        "SELECT u.profile_image_url FROM team_members tm JOIN users u ON u.id = tm.user_id WHERE tm.team_id = ? ORDER BY tm.created_at LIMIT 7",
+    )
+    .bind(team_id)
+    .fetch_all(executor)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| r.profile_image_url.unwrap_or_default())
+        .collect())
+}
+
+/// Count of team members (for "+N" overflow display).
+pub async fn count_by_team<'e, E>(executor: E, team_id: &str) -> Result<i64, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    sqlx::query_scalar("SELECT COUNT(*) FROM team_members WHERE team_id = ?")
+        .bind(team_id)
+        .fetch_one(executor)
+        .await
+}

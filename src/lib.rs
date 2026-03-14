@@ -9,6 +9,7 @@ pub fn create_router(state: app::AppState) -> Router {
     Router::new()
         .merge(site::home::routes())
         .merge(app::routes(state.clone()))
+        .fallback(app::features::not_found::handler)
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state)
 }
