@@ -854,12 +854,9 @@ const registerGraph = () => {
                             'line-color': '#B8B0A6',
                             'target-arrow-color': '#B8B0A6',
                             'target-arrow-shape': 'triangle',
-                            'curve-style': 'taxi',
-                            'taxi-direction': 'vertical',
-                            'taxi-turn': 5,
-                            'taxi-turn-min-distance': 100,
+                            'curve-style': 'bezier',
                             'target-arrow-shape': 'triangle',
-                            'opacity': 0.7
+                            'opacity': 0.9
                         }
                     },
                     {
@@ -2008,17 +2005,20 @@ const registerGraph = () => {
             const layout = cy.layout({
                 name: 'klay',
                 nodeDimensionsIncludeLabels: true,
-                animate: true,
+                animate: false,
                 animationDuration: 500,
                 fit: shouldFit,
                 padding: 30,
                 klay: {
+                    edgeRouting: 'SPLINES',
                     direction: this.layoutDirection === 'TB' ? 'DOWN' : 'RIGHT',
                     spacing: 80,
-                    layoutHierarchy: true,
+                    layoutHierarchy: false,
                     mergeEdges: true,
-                    nodeLayering: 'LONGEST_PATH',
+                    nodeLayering: 'NETWORK_SIMPLEX',
                     fixedAlignment: 'BALANCED',
+                    crossingMinimization: 'LAYER_SWEEP',
+                    separateConnectedComponents: true,
                 }
             });
 
