@@ -7,3 +7,4 @@ pub mod integrations;
 pub mod invites;
 pub mod organization;
 pub mod projects;
+pub mod teams;

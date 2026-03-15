@@ -119,6 +119,14 @@ pub async fn find_by_id_and_org(
     .await
 }
 
+/// Count projects assigned to a team.
+pub async fn count_by_team(pool: &sqlx::SqlitePool, team_id: &str) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE team_id = ?")
+        .bind(team_id)
+        .fetch_one(pool)
+        .await
+}
+
 /// Find a project by ID.
 pub async fn find_by_id(
     pool: &sqlx::SqlitePool,

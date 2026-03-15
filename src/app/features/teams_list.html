@@ -1,0 +1,59 @@
+{% extends "app/app_layout.html" %}
+
+{% block title %}Teams · {{ app_name }}{% endblock %}
+
+{% block app_extra_head %}
+<style type="text/tailwindcss">
+    .table-row-hover:hover {
+        background: #f8fafc;
+    }
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+    <div class="space-y-2">
+        <h1 class="text-4xl font-extrabold text-charcoal tracking-tight">Teams</h1>
+        <p class="text-slate-500 text-lg max-w-2xl">View all teams in your organization and their project assignments.</p>
+    </div>
+</div>
+<div class="glass-replacement rounded-2xl overflow-hidden mb-8 shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-border-subtle bg-slate-50/50">
+                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500">Team</th>
+                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 text-center">Members</th>
+                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-widest text-slate-500 text-center">Projects</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-border-subtle">
+                {% for team in teams %}
+                <tr class="table-row-hover transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-primary !text-xl">groups</span>
+                            </div>
+                            <span class="text-charcoal font-bold">{{ team.name }}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-charcoal font-semibold">{{ team.member_count }}</span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-charcoal font-semibold">{{ team.project_count }}</span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="px-6 py-12 text-center text-slate-500">
+                        No teams yet. Teams are created when you sign up or seed your organization.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
