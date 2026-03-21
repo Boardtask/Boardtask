@@ -31,12 +31,12 @@
                 {% for team in teams %}
                 <tr class="table-row-hover transition-colors">
                     <td class="px-6 py-4">
-                        <div class="flex items-center gap-3">
-                            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <a href="/app/teams/{{ team.id }}" class="flex items-center gap-3 text-charcoal hover:text-primary transition-colors group">
+                            <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15">
                                 <span class="material-symbols-outlined text-primary !text-xl">groups</span>
                             </div>
-                            <span class="text-charcoal font-bold">{{ team.name }}</span>
-                        </div>
+                            <span class="font-bold">{{ team.name }}</span>
+                        </a>
                     </td>
                     <td class="px-6 py-4 text-center">
                         <span class="text-charcoal font-semibold">{{ team.member_count }}</span>

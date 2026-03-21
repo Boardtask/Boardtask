@@ -112,3 +112,31 @@ where
         .fetch_one(executor)
         .await
 }
+
+/// Team member joined with user profile fields (for team detail UI).
+#[derive(Debug, FromRow)]
+pub struct TeamMemberWithUser {
+    pub user_id: String,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub profile_image_url: Option<String>,
+}
+
+/// List all members of a team with email and name (for display).
+pub async fn list_members_with_user_details<'e, E>(
+    executor: E,
+    team_id: &str,
+) -> Result<Vec<TeamMemberWithUser>, sqlx::Error>
+where
+    E: SqliteExecutor<'e>,
+{
+    sqlx::query_as::<_, TeamMemberWithUser>(
+        "SELECT tm.user_id, u.email, COALESCE(u.first_name, '') AS first_name, COALESCE(u.last_name, '') AS last_name, u.profile_image_url \
+         FROM team_members tm JOIN users u ON u.id = tm.user_id \
+         WHERE tm.team_id = ? ORDER BY u.email",
+    )
+    .bind(team_id)
+    .fetch_all(executor)
+    .await
+}
